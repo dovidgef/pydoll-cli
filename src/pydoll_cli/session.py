@@ -19,9 +19,11 @@ import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import aiohttp
 import psutil
+from pydoll.browser import Chrome
 
 from pydoll_cli import browsers
 from pydoll_cli.context import GlobalOptions
@@ -70,6 +72,12 @@ class SessionState:
     browser: str
     binary: str
     started_at: float
+    # Attached-session fields. An "attached" session does not own the browser
+    # process: we connected to an already-running browser, created a private
+    # incognito context, and track just the context + initial tab.
+    attached: bool = False
+    browser_context_id: str | None = None
+    target_id: str | None = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)
@@ -77,6 +85,7 @@ class SessionState:
     @classmethod
     def from_file(cls, path: Path) -> SessionState:
         data = json.loads(path.read_text())
+        # Forward-compat: fields absent in old state files default via dataclass.
         return cls(**data)
 
 
@@ -104,6 +113,11 @@ async def _probe_ws(port: int, *, timeout: float = 1.0) -> str | None:
 
 
 async def alive(state: SessionState) -> bool:
+    if state.attached:
+        # We don't own the process; just check the WS endpoint responds and
+        # (best-effort) that our context still exists.
+        ws = await _probe_ws(state.port)
+        return ws is not None
     if not _pid_alive(state.pid):
         return False
     ws = await _probe_ws(state.port)
@@ -204,21 +218,132 @@ async def start(
 
 
 def stop_quiet(name: str) -> None:
-    """Best-effort stop: kill the pid if alive, remove state file."""
+    """Best-effort stop: for owned sessions kill the pid, then remove state."""
     try:
         state = load(name)
     except FileNotFoundError:
         return
-    _kill(state.pid)
+    if not state.attached:
+        _kill(state.pid)
     with contextlib.suppress(FileNotFoundError):
         state_path(name).unlink()
 
 
 def stop(name: str, *, timeout: float = 10.0) -> None:
-    """Orderly stop: SIGTERM, wait, SIGKILL on timeout, remove state file."""
+    """Orderly stop.
+
+    For owned sessions: SIGTERM, wait, SIGKILL on timeout, remove state file.
+    For attached sessions: delete the incognito browser context (the remote
+    browser keeps running), then remove the state file.
+    """
     state = load(name)
-    _kill(state.pid, timeout=timeout)
+    if state.attached:
+        asyncio.run(_stop_attached(state))
+    else:
+        _kill(state.pid, timeout=timeout)
     state_path(name).unlink(missing_ok=True)
+
+
+async def _stop_attached(state: SessionState) -> None:
+    """Clean up what we created on the remote browser.
+
+    Incognito mode: delete the browser context (which closes its tabs).
+    Shared-profile mode: close only the tab we pinned.
+    """
+    browser = Chrome()
+    try:
+        await browser.connect(state.ws_url)
+        if state.browser_context_id:
+            with contextlib.suppress(Exception):
+                await browser.delete_browser_context(state.browser_context_id)
+        elif state.target_id:
+            with contextlib.suppress(Exception):
+                for t in await browser.get_opened_tabs():
+                    if t._target_id == state.target_id:
+                        await t.close()
+                        break
+    finally:
+        await browser.close()
+
+
+# ---- Attached sessions --------------------------------------------------
+
+
+async def start_attached(
+    name: str,
+    ws_url: str,
+    opts: GlobalOptions,
+    *,
+    initial_url: str | None = None,
+    use_incognito: bool = True,
+) -> SessionState:
+    """Attach to a running browser and persist a pinned tab for later reuse.
+
+    When ``use_incognito=True`` (default): a fresh incognito browser context is
+    created and the tab lives there — no cookies shared with the user's profile,
+    and ``session stop`` disposes the whole context.
+
+    When ``use_incognito=False``: a new tab is opened in the running browser's
+    default context, inheriting the user's cookies and logins. ``session stop``
+    closes only that tab.
+    """
+    if state_path(name).exists():
+        existing = load(name)
+        if await alive(existing):
+            return existing
+        stop_quiet(name)
+
+    browser = Chrome()
+    context_id: str | None = None
+    try:
+        await browser.connect(ws_url)
+        if use_incognito:
+            context_id = await browser.create_browser_context()
+            new_tab = await browser.new_tab(browser_context_id=context_id)
+        else:
+            new_tab = await browser.new_tab()
+        if initial_url:
+            await new_tab.go_to(initial_url)
+        target_id = new_tab._target_id
+    finally:
+        await browser.close()
+
+    # Pull port from the ws URL so later --session calls can probe liveness.
+    port = _port_from_ws(ws_url)
+
+    state = SessionState(
+        name=name,
+        pid=0,
+        port=port,
+        ws_url=ws_url,
+        user_data_dir='',
+        browser=opts.browser,
+        binary='',
+        started_at=time.time(),
+        attached=True,
+        browser_context_id=context_id,
+        target_id=target_id,
+    )
+    state_path(name).parent.mkdir(parents=True, exist_ok=True)
+    state_path(name).write_text(state.to_json())
+    return state
+
+
+def _port_from_ws(ws_url: str) -> int:
+    """Extract the port from a ws:// URL; fall back to 0 if unparseable."""
+    parts = urlsplit(ws_url)
+    return parts.port or 0
+
+
+async def probe_running_browser(
+    ports: list[int] | None = None, *, timeout: float = 1.0
+) -> str | None:
+    """Return the WebSocket URL of a running browser on one of the given ports."""
+    for port in ports or [9222]:
+        ws = await _probe_ws(port, timeout=timeout)
+        if ws:
+            return ws
+    return None
 
 
 def _kill(pid: int, *, timeout: float = 10.0) -> None:

@@ -162,9 +162,13 @@ A list of session objects, each extended with `"alive": true|false`.
 ## Attaching to an already-running browser
 
 If the user already has Chrome/Wavebox/Edge running with `--remote-debugging-port=PORT`,
-pass `--connect ws://127.0.0.1:PORT/devtools/browser/...` to attach instead of
-launching a new browser. Combine with `--fresh` so you operate in a new incognito
-browser context + new tab, leaving the user's existing tabs and session untouched:
+two patterns are available:
+
+### One-shot attach with a fresh incognito tab
+
+For a single command, use `--connect` + `--fresh` to get a new incognito browser
+context + tab in the user's running browser, leaving their existing tabs alone.
+The context is disposed when the command exits:
 
 ```bash
 pydoll-cli --connect ws://127.0.0.1:9222/devtools/browser/XXX --fresh --output json \
@@ -173,6 +177,54 @@ pydoll-cli --connect ws://127.0.0.1:9222/devtools/browser/XXX --fresh --output j
 
 `--new-tab` (default context) is the lighter-weight alternative when you want
 to share cookies with the running browser but not hijack an existing tab.
+
+### Persistent attached session (multi-step)
+
+When you need *several* commands to share state (a search, follow-up clicks, an
+extract, a screenshot), register an **attached session**. Two sub-modes:
+
+**Incognito (default)** — zero cookies shared with the user; great for
+unauthenticated research flows:
+
+```bash
+pydoll-cli session start research --attach --url https://www.google.com
+pydoll-cli --session research query "h3" --all
+pydoll-cli --session research click "h3"
+pydoll-cli --session research source
+pydoll-cli session stop research     # disposes the whole incognito context
+```
+
+**Shared profile** — pin a tab inside the user's real logged-in context. Use
+this when you need access to authenticated pages (Gmail, LinkedIn, internal
+dashboards) without bothering the user for creds:
+
+```bash
+pydoll-cli session start linkedin --attach --share-profile \
+  --url https://www.linkedin.com/feed/
+pydoll-cli --session linkedin query 'a[href*="/in/"]' --all --attr href
+pydoll-cli session stop linkedin     # closes only the pinned tab
+```
+
+In both modes, the tab (and incognito context, if any) are persisted under
+`~/.cache/pydoll-cli/sessions/<NAME>.json`; every `--session <NAME>` call
+reuses that exact tab until you `session stop`. The user's other tabs are
+never touched, and `session stop` **never kills the user's browser process**
+— it only disposes what we created.
+
+**Rule of thumb for agents:** default to `--share-profile` only when you
+actually need the user's logins. For clean research / scraping, the default
+incognito mode keeps the user's session hermetic.
+
+### Wavebox specifics
+
+Wavebox's app-level account onboarding blocks a clean fresh launch (no CDP
+readiness until the user logs in to Wavebox itself). So `session start --browser
+wavebox` **defaults to `--attach`**: we probe port 9222 for a running Wavebox,
+attach to it, and create the incognito context there. If no running Wavebox is
+found, the command errors with a clear message explaining what to start.
+
+Pass `--no-attach` if you want to insist on a fresh launch anyway (e.g. you
+have a pre-seeded Wavebox profile past onboarding at `--user-data-dir`).
 
 ## Tips for agents
 

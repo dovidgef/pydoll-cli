@@ -46,6 +46,14 @@ async def open_browser(opts: GlobalOptions) -> AsyncIterator[tuple[Any, Any]]:
 
     Mode precedence: ``--connect`` > ``--session`` > fresh launch.
     """
+    # Attached session: reuse the persisted tab (and incognito context if any).
+    if opts.session and not opts.connect:
+        state = session_mod.load(opts.session)
+        if state.attached:
+            async with _open_attached(opts, state) as pair:
+                yield pair
+                return
+
     ws_url = _resolve_ws_url(opts)
     browser: Browser
     if ws_url is not None:
@@ -90,6 +98,41 @@ def _resolve_ws_url(opts: GlobalOptions) -> str | None:
         state = session_mod.load(opts.session)
         return state.ws_url
     return None
+
+
+@asynccontextmanager
+async def _open_attached(opts: GlobalOptions, state: Any) -> AsyncIterator[tuple[Any, Any]]:
+    """Reuse a persisted attached session: connect, find our incognito tab.
+
+    If the tab was closed externally, create a new one in the same context and
+    update the state file with its new target_id.
+    """
+    browser = Chrome()
+    try:
+        await browser.connect(state.ws_url)
+        tab = None
+        tabs = await browser.get_opened_tabs()
+        for t in tabs:
+            if t._target_id == state.target_id:
+                tab = t
+                break
+        if tab is None:
+            # Tab was closed; spawn a fresh one in the same context (incognito
+            # or default, depending on how the session was started).
+            if state.browser_context_id:
+                tab = await browser.new_tab(
+                    browser_context_id=state.browser_context_id,
+                )
+            else:
+                tab = await browser.new_tab()
+            state.target_id = tab._target_id
+            session_mod.state_path(state.name).write_text(state.to_json())
+        # Apply --tab-url/--tab overrides if the caller wants a different tab
+        # within the same attached browser (unlikely but supported).
+        tab = await _maybe_switch_tab(browser, tab, opts)
+        yield browser, tab
+    finally:
+        await browser.close()
 
 
 async def _maybe_switch_tab(browser: Any, default_tab: Any, opts: GlobalOptions) -> Any:

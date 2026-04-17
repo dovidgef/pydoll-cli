@@ -37,6 +37,18 @@ pydoll-cli --session agent-run get https://news.ycombinator.com
 pydoll-cli --session agent-run query "a.storylink" --all --attr href --output json
 pydoll-cli session stop agent-run
 
+# Attach to a running Chrome/Wavebox and operate in an isolated incognito tab
+# that persists across commands (default for --browser wavebox; opt-in elsewhere)
+pydoll-cli session start my-work --attach --url https://example.com
+pydoll-cli --session my-work query "h1" --attr textContent
+pydoll-cli session stop my-work    # deletes just the incognito context
+
+# Attach but share your real logged-in profile (cookies/logins flow through)
+# — session stop only closes the pinned tab; the browser keeps running
+pydoll-cli session start linkedin --attach --share-profile \
+  --url https://www.linkedin.com/feed/
+pydoll-cli --session linkedin query "h1"
+
 # Use Wavebox instead of Chrome
 pydoll-cli --browser wavebox screenshot https://example.com -o shot.png
 
@@ -94,6 +106,16 @@ pydoll-cli exposes the full pydoll feature set as subcommands. See `pydoll-cli <
 | `--tab INT` / `--tab-url URL`  | Target a specific tab when using `--session` / `--connect`.               |
 | `--new-tab`                    | With `--connect`/`--session`: open a new tab (default context).           |
 | `--fresh`                      | With `--connect`/`--session`: open a new incognito context + tab; leaves existing tabs untouched. Ideal for driving your logged-in browser without disturbing it. |
+
+Session-start-only flags (on `session start`):
+
+| Flag                      | Meaning                                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `--attach/--no-attach`    | Attach to a running browser on `--attach-port` (default 9222) instead of launching one. On by default for `--browser wavebox`.        |
+| `--attach-port PORT`      | CDP port of the running browser to attach to (default 9222).                                                                          |
+| `--share-profile`         | With `--attach`: pin a tab in the running browser's default (logged-in) context instead of a fresh incognito context. `session stop` then just closes the tab. |
+| `--url URL`               | Navigate the pinned tab to this URL on startup.                                                                                       |
+| `--startup-timeout SEC`   | Seconds to wait for CDP readiness on a fresh launch (default 30).                                                                     |
 | `--timeout SECONDS`            | Per-command timeout (default 30).                                         |
 | `--output {text,json}`         | `json` for stable machine-readable output.                                |
 | `-q, --quiet`                  | Suppress non-data output.                                                 |
