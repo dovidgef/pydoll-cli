@@ -60,6 +60,11 @@ def test_version():
         ['network', 'logs', '--help'],
         ['cloudflare', '--help'],
         ['cloudflare', 'bypass', '--help'],
+        ['tabs', '--help'],
+        ['tabs', 'list', '--help'],
+        ['tabs', 'new', '--help'],
+        ['tabs', 'close', '--help'],
+        ['tabs', 'focus', '--help'],
     ],
 )
 def test_subcommand_help(cmd: list[str]):

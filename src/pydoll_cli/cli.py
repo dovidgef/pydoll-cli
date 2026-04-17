@@ -69,6 +69,9 @@ from pydoll_cli.commands import (
     source as source_cmd,
 )
 from pydoll_cli.commands import (
+    tabs as tabs_cmd,
+)
+from pydoll_cli.commands import (
     text as text_cmd,
 )
 from pydoll_cli.commands import (
@@ -273,6 +276,7 @@ app.add_typer(cookies_cmd.group_app, name='cookies')
 app.add_typer(har_cmd.group_app, name='har')
 app.add_typer(network_cmd.group_app, name='network')
 app.add_typer(cloudflare_cmd.group_app, name='cloudflare')
+app.add_typer(tabs_cmd.group_app, name='tabs')
 
 # Flat commands
 navigate_cmd.register(app)
