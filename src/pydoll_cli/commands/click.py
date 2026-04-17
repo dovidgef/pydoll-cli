@@ -7,6 +7,7 @@ from typing import Annotated
 import typer
 
 from pydoll_cli.async_runner import open_browser, run_async
+from pydoll_cli.commands._shared import _normalize_url_selector
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.output import CliError, Printer
 
@@ -31,6 +32,7 @@ def register(app: typer.Typer) -> None:
         wait: Annotated[int, typer.Option('--wait', help='Seconds to wait for element.')] = 5,
         human: Annotated[bool, typer.Option('--human/--fast', help='Humanized click.')] = True,
     ) -> None:
+        url, selector = _normalize_url_selector(url, selector)
         if not selector:
             raise CliError('Missing SELECTOR argument.', exit_code=2)
         opts: GlobalOptions = ctx.obj

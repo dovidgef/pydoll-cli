@@ -43,6 +43,16 @@ def register(app: typer.Typer) -> None:
             Path | None,
             typer.Option('--file', help='Path to a .js file.'),
         ] = None,
+        by_value: Annotated[
+            bool,
+            typer.Option(
+                '--by-value/--as-ref',
+                help=(
+                    'Return the result serialized by value (default) so dicts/lists come '
+                    'back as real Python objects. Use --as-ref to keep an object reference.'
+                ),
+            ),
+        ] = True,
     ) -> None:
         opts: GlobalOptions = ctx.obj
         printer = Printer(opts)
@@ -64,8 +74,9 @@ def register(app: typer.Typer) -> None:
         async with open_browser(opts) as (_browser, tab):
             if url is not None:
                 await tab.go_to(url, timeout=int(opts.timeout))
-            result = await tab.execute_script(src)
-        value = result.get('result', {}).get('result', {}).get('value')
+            result = await tab.execute_script(src, return_by_value=by_value)
+        inner = result.get('result', {}).get('result', {})
+        value = inner.get('value') if 'value' in inner else inner
         if opts.output == 'json':
             printer.emit({'value': value})
         elif isinstance(value, (dict, list)):

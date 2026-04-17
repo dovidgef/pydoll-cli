@@ -7,6 +7,7 @@ from typing import Annotated
 import typer
 
 from pydoll_cli.async_runner import open_browser, run_async
+from pydoll_cli.commands._shared import _normalize_url_selector_text
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.output import CliError, Printer
 
@@ -39,6 +40,7 @@ def register(app: typer.Typer) -> None:
         ] = 50,
         wait: Annotated[int, typer.Option('--wait', help='Seconds to wait for element.')] = 5,
     ) -> None:
+        url, selector, text = _normalize_url_selector_text(url, selector, text)
         if not selector or not text:
             raise CliError('Both SELECTOR and TEXT are required.', exit_code=2)
         opts: GlobalOptions = ctx.obj
