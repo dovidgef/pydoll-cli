@@ -15,6 +15,9 @@ predictable, machine-readable output.
    invocations rather than launching a new Chrome per step.
 4. **Exit codes mean something.** The code tells the agent *why* a call failed.
 5. **No hidden interactivity.** Every command runs to completion or times out.
+6. **Sandbox stays on by default.** In Docker/CI, pass `--in-container` to add
+   `--no-sandbox` + `--disable-dev-shm-usage`; never add them by hand on a real
+   desktop.
 
 ## Recommended agent workflow
 
