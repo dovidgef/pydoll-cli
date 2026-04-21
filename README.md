@@ -98,6 +98,7 @@ pydoll-cli exposes the full pydoll feature set as subcommands. See `pydoll-cli <
 | `--accept-languages CSV`       | e.g. `en-US,en`.                                                          |
 | `--window-size WxH`            | e.g. `1920x1080`.                                                         |
 | `--disable-images`             | Skip image loading.                                                       |
+| `--in-container`               | Docker/CI-only: add `--no-sandbox` + `--disable-dev-shm-usage`. Skip on a normal desktop — the Chrome sandbox should stay on. |
 | `-a, --arg TEXT`               | Repeatable raw Chromium flag, e.g. `-a --no-sandbox`.                     |
 | `--pref KEY=VAL`               | Repeatable nested preference, `profile.password_manager_enabled=false`.   |
 | `--cdp-port PORT`              | Fix the remote-debugging port (default: random).                          |

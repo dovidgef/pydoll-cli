@@ -176,6 +176,17 @@ def main(
         int | None,
         typer.Option('--cdp-port', help='Fix the CDP remote-debugging port.'),
     ] = None,
+    in_container: Annotated[
+        bool,
+        typer.Option(
+            '--in-container',
+            help=(
+                'Add --no-sandbox + --disable-dev-shm-usage for Docker/CI environments '
+                'where the Chrome sandbox cannot initialize. Skips them by default — on '
+                'a normal desktop the sandbox should stay on.'
+            ),
+        ),
+    ] = False,
     connect: Annotated[
         str | None,
         typer.Option('--connect', help='Attach to a running browser via ws:// URL.'),
@@ -252,6 +263,7 @@ def main(
         extra_args=list(extra_args or []),
         prefs=list(prefs or []),
         cdp_port=cdp_port,
+        in_container=in_container,
         connect=connect,
         session=session,
         tab=tab,

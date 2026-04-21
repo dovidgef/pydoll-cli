@@ -28,6 +28,7 @@ class GlobalOptions:
     extra_args: list[str] = field(default_factory=list)
     prefs: list[str] = field(default_factory=list)
     cdp_port: int | None = None
+    in_container: bool = False  # adds --no-sandbox + --disable-dev-shm-usage
 
     # Connection modes (mutually exclusive with fresh launch)
     connect: str | None = None

@@ -15,7 +15,6 @@ import platform
 import signal
 import socket
 import subprocess
-import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -415,10 +414,10 @@ def _build_launch_args(
         w, _, h = opts.window_size.partition('x')
         if w and h:
             args.append(f'--window-size={w},{h}')
-    if sys.platform == 'linux':
-        # Harmless on most desktops; critical in containers.
+    if opts.in_container:
+        # Docker/CI: sandbox can't init and /dev/shm is tiny. Opt-in only.
         for flag in ('--no-sandbox', '--disable-dev-shm-usage'):
-            if flag not in opts.extra_args:
+            if flag not in args and flag not in opts.extra_args:
                 args.append(flag)
     for extra in opts.extra_args:
         if extra and extra not in args:

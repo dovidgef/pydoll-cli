@@ -43,6 +43,12 @@ def build_options(opts: GlobalOptions) -> ChromiumOptions:
             {'profile': {'managed_default_content_settings': {'images': 2}}},
         )
 
+    if opts.in_container:
+        # Docker/CI: sandbox can't init and /dev/shm is tiny. Opt-in only.
+        for flag in ('--no-sandbox', '--disable-dev-shm-usage'):
+            if flag not in options.arguments:
+                options.add_argument(flag)
+
     for raw in opts.extra_args:
         if raw and raw not in options.arguments:
             options.add_argument(raw)

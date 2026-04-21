@@ -58,6 +58,18 @@ def test_window_size_bad_shape_silently_ignored():
     assert not any('--window-size=' in a for a in options.arguments)
 
 
+def test_no_sandbox_not_added_by_default():
+    options = build_options(GlobalOptions())
+    assert '--no-sandbox' not in options.arguments
+    assert '--disable-dev-shm-usage' not in options.arguments
+
+
+def test_in_container_adds_sandbox_bypass():
+    options = build_options(GlobalOptions(in_container=True))
+    assert '--no-sandbox' in options.arguments
+    assert '--disable-dev-shm-usage' in options.arguments
+
+
 def test_browser_binary_overrides_kind(tmp_path: Path):
     fake = tmp_path / 'chrome'
     fake.write_text('')

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pydoll-cli"
-version = "0.1.3"
+version = "0.1.4"
 description = "Command-line wrapper around pydoll — automate Chromium-based browsers (Chrome, Edge, Wavebox) via the Chrome DevTools Protocol, no WebDriver required."
 readme = "README.md"
 requires-python = ">=3.10"
