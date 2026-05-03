@@ -34,6 +34,13 @@ pydoll-cli --output json session stop agent-run
 
 **Headless is the default.** If the user wants to *watch* the browser drive itself, pass the global `--no-headless` flag (before the subcommand): `pydoll-cli --no-headless --output json session start agent-run`. There is no per-session toggle — set it at session-start time. (`session start --help` shows `--no-headless` in its example without listing it as a session-level option, which is misleading: it's a *global* flag.)
 
+**Headless + bot-protected sites: spoof the UA at session-start.** Headless Chrome's default User-Agent contains the literal token `HeadlessChrome/...`, which heavily-protected destinations (search engines, ticketing/airlines, social platforms, Cloudflare-fronted sites) match in a one-line check. Symptom: a "challenge" / "unusual traffic" / `/sorry/` page where a logged-out browser would have served real HTML. Set the `--user-agent` global to a current desktop Chrome string (matches the major version pydoll launches — see `pydoll-cli info | grep product`):
+```bash
+UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36'
+pydoll-cli --user-agent "$UA" --webrtc-leak-protection --output json session start agent
+```
+Verify it took: `pydoll-cli --session agent eval --script 'navigator.userAgent'` should print no `Headless`. Headed (`--no-headless`) drops the `Headless` token automatically — this gotcha is headless-only.
+
 ## Command quick-reference
 
 Pass `--session NAME --output json` on every call below (omitted here for brevity). Exit code is the primary failure signal; see table at the bottom.
