@@ -19,6 +19,7 @@ def register(app: typer.Typer) -> None:
             'Examples:\n'
             '  pydoll-cli text https://example.com\n'
             '  pydoll-cli text https://example.com --selector "h1"\n'
+            '  pydoll-cli text --selector ".title" --all\n'
         ),
     )
     @run_async
@@ -31,12 +32,34 @@ def register(app: typer.Typer) -> None:
             str | None,
             typer.Option('--selector', help='CSS/XPath selector; default: whole body.'),
         ] = None,
+        all_matches: Annotated[
+            bool,
+            typer.Option(
+                '--all',
+                help='With --selector, return text for every match as a list. Default: first match.',
+            ),
+        ] = False,
     ) -> None:
         opts: GlobalOptions = ctx.obj
         printer = Printer(opts)
+        if all_matches and not selector:
+            raise CliError('--all requires --selector', exit_code=2)
         async with open_browser(opts) as (_browser, tab):
             if url is not None:
                 await tab.go_to(url, timeout=int(opts.timeout))
+            if selector and all_matches:
+                elements = await tab.query(
+                    selector, timeout=int(opts.timeout), find_all=True, raise_exc=False,
+                )
+                if not elements:
+                    raise CliError(f'Selector not found: {selector!r}', exit_code=4)
+                texts = [await el.text for el in elements]
+                if opts.output == 'json':
+                    printer.emit({'texts': texts, 'count': len(texts)})
+                else:
+                    joined = '\n'.join(texts)
+                    printer.emit(joined, text=joined)
+                return
             if selector:
                 element = await tab.query(selector, timeout=int(opts.timeout), raise_exc=False)
                 if element is None:

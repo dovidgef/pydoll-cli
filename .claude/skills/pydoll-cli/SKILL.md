@@ -42,7 +42,7 @@ Pass `--session NAME --output json` on every call below (omitted here for brevit
 | --- | --- | --- |
 | `get URL` | Navigate (reuses the session's current tab) | `{"url","title"}` |
 | `source` | Full HTML of current page | `{"html","bytes"}` |
-| `text [--selector S]` | Visible text of page or element | `{"text"}` |
+| `text [--selector S] [--all]` | Visible text of page or element. `--all` returns every match | `{"text"}` or `{"texts":[...],"count":N}` |
 | `query S [--all] [--attr A] [--wait N]` | Find element(s); `--attr href` for links | `{"text","attr","tag"}` or list |
 | `click S [--wait N] [--fast]` | Click (humanized cursor curve by default; `--fast` for raw JS click) | `{"clicked","url"}` |
 | `type S "text" [--human] [--delay-ms N]` | Type into an input. `--human` = pydoll variable-cadence + ~2% typos; `--delay-ms N` = constant N-ms cadence; default = instant `insert_text` | `{"selector","typed"}` |
@@ -78,6 +78,12 @@ For any flag you're unsure about: `pydoll-cli <command> --help`. It always has a
 To actually open a new tab, use `tabs new`:
 ```bash
 pydoll-cli --session s --output json tabs new --url https://example.com
+```
+
+**`tabs new` does not shift focus.** Subsequent `--session NAME` calls without `--tab N` / `--tab-url SUBSTR` keep targeting the previous tab. Pin the new tab on each call (`--tab-url` is stable across the session; index isn't — see #2):
+```bash
+pydoll-cli --session s --output json tabs new --url https://x.com
+pydoll-cli --session s --tab-url 'x.com' --output json query 'h1'
 ```
 
 ### 2. `tabs list` order is unstable — new tabs appear at **index 0**.
@@ -146,6 +152,12 @@ pydoll-cli --output json cloudflare bypass URL --captcha-timeout 15 -o page.html
 
 No default destination. Always `-o shot.png` (or `--base64` to stream to stdout). For "whole page beyond viewport" add `--full-page`.
 
+If `screenshot --full-page` hangs the first time on a fresh tab (seen on Chrome 146 with `--page-load-state interactive`), the renderer hasn't laid out content past the viewport yet. Either wait for full load before the capture, or take a viewport screenshot first to warm the renderer:
+```bash
+pydoll-cli --session s --output json wait --js 'document.readyState === "complete"'
+pydoll-cli --session s --output json screenshot -o shot.png --full-page
+```
+
 ### 8. `eval --script` returns values, not references
 
 By default JS return values are serialized: `{a:1}` → `{"value":{"a":1}}`, arrays → arrays, etc. Only pass `--as-ref` if you specifically need a handle to a DOM node to reuse in a later eval. You almost never do.
@@ -199,7 +211,7 @@ pydoll-cli --output json --session s eval --script \
 - **Wait for content right after navigation:** `get URL --wait-for ".content" --wait 30` (one round-trip).
 - **Wait between commands:** `wait --selector ".content" --wait 30` — uses `tab.query` polling; supports `--count N` for "at least N matches".
 - **Wait for SPA route change after a click:** `wait --url-contains /dashboard --wait 10`.
-- **Wait for a CDP page event:** `wait --page-event {load,dom-content,frame-navigated}`.
+- **Wait for a CDP page event:** `wait --page-event {load,dom-content,frame-navigated}`. `load` and `dom-content` auto-resolve when the page is already past that milestone (checks `document.readyState` first); `frame-navigated` always listens for the *next* navigation, so use it only when one is pending — for "did this `click` cause a nav?", prefer `wait --url-contains '/expected'`.
 - **Aggregator with progressive results (Kayak/Expedia/Booking/Skyscanner):** `wait --stable-ids ".result|data-id" --stable-ms 2000 --wait 35`. Counts unique IDs and resolves when no new ones appear for `--stable-ms`. Far better than polling on raw count — count goes flat between batches even while data is still loading.
 - **Network settled** (use only when no selector/URL signal exists — Playwright's docs explicitly discourage networkidle): `wait --network-idle --idle-ms 500`.
 - **Wait for arbitrary JS to become truthy:** `wait --js 'document.readyState === "complete" && window.app.ready'` (server-side Promise loop, single CDP call).
@@ -225,6 +237,13 @@ pydoll-cli --output json --session s request GET 'https://site.com/api/endpoint?
   -H 'x-api-version: 2' -H 'accept: application/json'
 ```
 Returns `{status, json, ...}` — no DOM parsing, no hydration waits, ~10× faster for paginated lists. Catch is finding the endpoint: open DevTools Network tab in the user's browser, filter to XHR, copy the request. For LinkedIn/Twitter/etc., the endpoints exist but may need additional headers (`csrf-token`, `x-li-track`) — get these from a real browser request first.
+
+`request` issues `fetch()` from the **current tab's page context**, so the page's CSP applies — strict `connect-src` (HN, GitHub, etc.) blocks cross-origin fetches with `TypeError: Failed to fetch` even when the target host accepts CORS. Workaround: navigate to a permissive page first.
+```bash
+pydoll-cli --session s --output json get https://example.com    # any page without strict CSP
+pydoll-cli --session s --output json request GET https://api.target.com/x   # works
+```
+Cookies are sent based on the **target** host's jar, so the detour doesn't cost you auth. `about:blank` doesn't work — pydoll reads `document.cookie` after the fetch and that throws on `about:blank`.
 
 **For virtualized lists** (React virtual-scroll, infinite scroll), DOM scraping is unreliable because rows recycle as you scroll — `query --all` returns a sliding window, not the full list. Use `request` against the underlying API. If you must use the DOM, gate on `wait --stable-ids` (not stable-count — count stays flat *between* batches while new data is still loading).
 
@@ -294,6 +313,15 @@ pydoll-cli --session s network fail -p /track/ --reason CONNECTION_REFUSED \
 `-p PATTERN` is a substring match against the request URL. `-t TYPE` is one of `Document/Stylesheet/Image/Media/Font/Script/XHR/Fetch/WebSocket/...` (case-insensitive). On URL/type miss, the request continues unmodified — the wrapper only intercepts what matches.
 
 `network mock` is the testing-side complement to `request` (gotcha #14): when you want to drive the page but stub the API.
+
+**Cross-origin mocks need `Access-Control-Allow-Origin`.** The browser still CORS-checks fulfilled responses, so a mock for a host different from the page's origin must include the header or the inner `fetch()` (or `request`) fails with `TypeError: Failed to fetch`:
+```bash
+pydoll-cli --session s network mock -p /api/me --status 200 --body fixture.json \
+  -H 'content-type: application/json' \
+  -H 'access-control-allow-origin: *' \
+  -- request GET https://api.other-host.com/api/me
+```
+Same-origin mocks (page is on `app.com`, mocking `app.com/api/...`) don't need it.
 
 The `--` separator is conventional but not required — the wrapping command captures everything after the recognized options as the inner command.
 

@@ -129,6 +129,49 @@ def test_wait_page_event_invalid_exits_2():
     assert result.exit_code == 2
 
 
+def test_wait_page_event_load_resolves_when_already_complete():
+    tab = _Tab()
+    tab.execute_script = AsyncMock(
+        return_value={'result': {'result': {'type': 'string', 'value': 'complete'}}},
+    )
+    with patch('pydoll_cli.commands.wait.open_browser', _stub_browser(tab)):
+        result = runner.invoke(
+            app, ['--output', 'json', 'wait', '--page-event', 'load', '--wait', '0.5'],
+        )
+    assert result.exit_code == 0, result.stdout
+    assert '"already": "complete"' in result.stdout
+    tab.enable_page_events.assert_not_called()
+
+
+def test_wait_page_event_dom_content_resolves_when_interactive():
+    tab = _Tab()
+    tab.execute_script = AsyncMock(
+        return_value={'result': {'result': {'type': 'string', 'value': 'interactive'}}},
+    )
+    with patch('pydoll_cli.commands.wait.open_browser', _stub_browser(tab)):
+        result = runner.invoke(
+            app,
+            ['--output', 'json', 'wait', '--page-event', 'dom-content', '--wait', '0.5'],
+        )
+    assert result.exit_code == 0, result.stdout
+    assert '"already": "interactive"' in result.stdout
+    tab.enable_page_events.assert_not_called()
+
+
+def test_wait_page_event_load_subscribes_when_loading():
+    tab = _Tab()
+    tab.execute_script = AsyncMock(
+        return_value={'result': {'result': {'type': 'string', 'value': 'loading'}}},
+    )
+    with patch('pydoll_cli.commands.wait.open_browser', _stub_browser(tab)):
+        result = runner.invoke(
+            app, ['--output', 'json', 'wait', '--page-event', 'load', '--wait', '0.3'],
+        )
+    # Mock can't fire CDP events — falls through to listener and times out.
+    assert result.exit_code == 3, (result.exit_code, result.stdout)
+    tab.enable_page_events.assert_awaited_once()
+
+
 def test_wait_network_idle_subscribes_to_three_events():
     tab = _Tab()
     with patch('pydoll_cli.commands.wait.open_browser', _stub_browser(tab)):

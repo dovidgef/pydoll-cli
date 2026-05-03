@@ -127,6 +127,8 @@ async def watch(
     done = asyncio.Event()
 
     def _emit(rec: dict[str, Any]) -> None:
+        if max_events and counter[0] >= max_events:
+            return
         json.dump(rec, sys.stdout, ensure_ascii=False)
         sys.stdout.write('\n')
         sys.stdout.flush()

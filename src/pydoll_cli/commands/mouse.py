@@ -142,10 +142,9 @@ async def hover(
         if element is None:
             raise CliError(f'Selector not found: {selector!r}', exit_code=4)
         # Read element's bounding box and move to its centre.
-        result = await tab.execute_script(
-            'const r = argument.getBoundingClientRect();'
-            ' [r.left + r.width / 2, r.top + r.height / 2]',
-            element,
+        result = await element.execute_script(
+            'const r = this.getBoundingClientRect();'
+            ' return [r.left + r.width / 2, r.top + r.height / 2];',
             return_by_value=True,
         )
         coords = _scalar_value(result)

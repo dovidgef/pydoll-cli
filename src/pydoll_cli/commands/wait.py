@@ -270,12 +270,26 @@ async def _wait_url_contains(tab: Any, needle: str, *, timeout: float) -> dict[s
 
 
 async def _wait_page_event(tab: Any, event_alias: str, *, timeout: float) -> dict[str, Any]:
-    event_name = _PAGE_EVENT_MAP.get(event_alias.lower())
+    alias = event_alias.lower()
+    event_name = _PAGE_EVENT_MAP.get(alias)
     if event_name is None:
         raise CliError(
             f'--page-event must be one of: {", ".join(_PAGE_EVENT_MAP)} (got {event_alias!r})',
             exit_code=2,
         )
+    # Resolve immediately if the page is already past this milestone — the
+    # CDP event has already fired and a fresh listener would hang for the
+    # NEXT navigation that may never come.
+    if alias in ('load', 'dom-content'):
+        with contextlib.suppress(Exception):
+            result = await tab.execute_script(
+                'return document.readyState', return_by_value=True,
+            )
+            ready = _scalar_value(result)
+            if alias == 'load' and ready == 'complete':
+                return {'event': event_alias, 'already': ready}
+            if alias == 'dom-content' and ready in ('interactive', 'complete'):
+                return {'event': event_alias, 'already': ready}
     page_was_enabled = getattr(tab, 'page_events_enabled', False)
     if not page_was_enabled:
         await tab.enable_page_events()
