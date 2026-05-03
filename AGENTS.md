@@ -110,6 +110,57 @@ With `--all`:
 {"selector": "input[name=q]", "typed": "pydoll"}
 ```
 
+### `wait`
+```json
+{"ready": true, "ms": 1234, "matched": {"selector": ".content", "count": 1}}
+```
+`matched` shape varies by mode: `{selector,count}` for `--selector`/`--stable-ids`,
+`{inflight,idle_ms}` for `--network-idle`, `{url}` for `--url-contains`,
+`{event}` for `--page-event`, `{value}` for `--js`. Exits **3** on timeout.
+
+### `keyboard press` / `hotkey` / `type` / `down` / `up`
+```json
+{"pressed": "ENTER", "modifiers": ""}
+{"hotkey": ["CONTROL", "S"]}
+{"typed": "hello", "humanize": false}
+```
+
+### `mouse move` / `click` / `drag` / `hover`
+```json
+{"clicked": [100, 200], "button": "LEFT", "double": false, "humanize": false}
+{"hover": "#menu", "at": [50, 12], "humanize": false}
+```
+
+### `scroll`
+```json
+{"scrolled": {"by_y": 500}}
+{"scrolled": {"to_bottom": true, "loops": 3, "height": 12000}}
+```
+
+### `upload`
+```json
+{"selector": "input[type=file]", "files": ["/abs/a.png"], "via_chooser": false}
+```
+
+### `batch`
+A list of per-URL records:
+```json
+[
+  {"url": "https://a.com", "title": "A", "screenshot": "shots/0000.png", "query_result": "Hello", "error": null},
+  {"url": "https://b.com", "title": null, "screenshot": null, "query_result": null, "error": "TimeoutError: ..."}
+]
+```
+
+### `network watch`
+Streams one JSON document per line (NDJSON), not a single document. Each line is:
+```json
+{"kind": "request", "request_id": "...", "url": "...", "method": "GET", "headers": {...}, "type": "XHR", "timestamp": 12345.6}
+{"kind": "response", "request_id": "...", "url": "...", "status": 200, "mime_type": "application/json", "headers": {...}, "timestamp": 12345.7}
+```
+
+### `cloudflare auto-solve`
+Long-running. Emits a final `{"auto_solve": "stopped", "duration": N or null}` on exit.
+
 ### `extract`
 With the schema's model. One record, or a list when `--all`.
 ```json

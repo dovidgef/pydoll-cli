@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import functools
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -133,6 +133,46 @@ async def _open_attached(opts: GlobalOptions, state: Any) -> AsyncIterator[tuple
         yield browser, tab
     finally:
         await browser.close()
+
+
+async def wait_for_event(
+    tab: Any,
+    event_name: str,
+    *,
+    predicate: Callable[[dict[str, Any]], bool] | Callable[[dict[str, Any]], Awaitable[bool]] | None = None,
+    timeout: float,
+) -> dict[str, Any]:
+    """Subscribe to a CDP event on ``tab``; resolve with the first matching event.
+
+    ``predicate`` may be sync or async; return ``True`` to accept the event.
+    Raises ``asyncio.TimeoutError`` if no matching event arrives within ``timeout``.
+    The callback is removed before returning, even on timeout/cancellation.
+
+    The corresponding event domain (Page, Network, etc.) must already be enabled
+    on ``tab`` before calling this — otherwise events never fire.
+    """
+    fut: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
+
+    async def callback(event: dict[str, Any]) -> None:
+        if fut.done():
+            return
+        try:
+            if predicate is None:
+                accept: bool = True
+            else:
+                result = predicate(event)
+                accept = bool(await result) if asyncio.iscoroutine(result) else bool(result)
+        except Exception:
+            return
+        if accept and not fut.done():
+            fut.set_result(event)
+
+    callback_id = await tab.on(event_name, callback)
+    try:
+        return await asyncio.wait_for(fut, timeout=timeout)
+    finally:
+        with contextlib.suppress(Exception):
+            await tab.remove_callback(callback_id)
 
 
 async def _maybe_switch_tab(browser: Any, default_tab: Any, opts: GlobalOptions) -> Any:

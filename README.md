@@ -66,6 +66,18 @@ pydoll-cli extract https://quotes.toscrape.com \
 
 # Hybrid HTTP (authenticated via the browser session)
 pydoll-cli --session logged-in request GET https://my-site.com/api/user/profile
+
+# SPA-friendly: load fast, then wait on real content
+pydoll-cli --page-load-state interactive --session s get https://app.example.com
+pydoll-cli --session s wait --selector ".content" --wait 30
+pydoll-cli --session s query "h1"
+
+# Aggregator with progressive results — wait for the result set to stabilize
+pydoll-cli --session s wait --stable-ids ".result|data-id" --stable-ms 2000 --wait 35
+
+# Many independent URLs in parallel (one tab each, ~10× sequential)
+pydoll-cli --output json batch https://a.com https://b.com https://c.com \
+  --query "h1" --concurrency 3
 ```
 
 ## Feature overview
@@ -74,13 +86,15 @@ pydoll-cli exposes the full pydoll feature set as subcommands. See `pydoll-cli <
 
 | Category            | Commands                                                                 |
 | ------------------- | ------------------------------------------------------------------------ |
-| Navigation          | `get`, `source`, `text`                                                  |
+| Navigation          | `get [URL] --wait-for SEL`, `source`, `text`                             |
 | Capture             | `screenshot`, `pdf`, `bundle`                                            |
-| Interaction         | `click`, `type`, `eval`, `query`                                         |
+| Interaction         | `click`, `type`, `eval`, `query`, `keyboard`, `mouse`, `scroll`, `upload`|
+| SPA waits           | `wait --selector\|--network-idle\|--url-contains\|--page-event\|--js\|--stable-ids` |
+| Parallel            | `batch URL [URL...]` (asyncio.gather across tabs)                        |
 | Extraction          | `extract` (Pydantic schema — Python file or JSON)                        |
-| Network             | `request`, `har record`, `har replay`, `network logs`                    |
+| Network             | `request`, `har record`, `har replay`, `network logs`, `network watch`   |
 | Cookies & state     | `cookies get`, `cookies set`, `cookies clear`                            |
-| Stealth / evasion   | `cloudflare bypass`, humanized typing via `type --human`                 |
+| Stealth / evasion   | `cloudflare bypass`, `cloudflare auto-solve`, humanized typing/clicking, `--webrtc-leak-protection` |
 | Sessions            | `session start`, `session stop`, `session list`, `session info`, `session attach` |
 | Scripting           | `shell`, `run SCRIPT.py`                                                 |
 | Introspection       | `info`, `browsers`                                                       |
@@ -96,6 +110,8 @@ pydoll-cli exposes the full pydoll feature set as subcommands. See `pydoll-cli <
 | `--incognito`                  | Launch incognito.                                                         |
 | `--proxy URL`                  | `scheme://user:pass@host:port`. Credentials handled automatically.        |
 | `--proxy-insecure`             | Append `--ignore-certificate-errors`. For authenticated proxies (Bright Data, etc.) that present an internal CA cert. |
+| `--webrtc-leak-protection`     | Enable pydoll WebRTC leak protection (recommended when proxying — WebRTC otherwise reveals the real IP). |
+| `--page-load-state {complete,interactive}` | When to consider navigation complete. `interactive` returns on DOMContentLoaded (~2–5× faster on JS-heavy pages); `complete` (default) waits for full `load`. |
 | `--user-agent STRING`          | Override UA (Client Hints + navigator auto-synced).                       |
 | `--accept-languages CSV`       | e.g. `en-US,en`.                                                          |
 | `--window-size WxH`            | e.g. `1920x1080`.                                                         |

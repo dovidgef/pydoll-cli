@@ -19,6 +19,7 @@ pydoll-cli --output json session start agent-run
 
 # 2. Drive it — always pass --session NAME and --output json
 pydoll-cli --output json --session agent-run get https://example.com
+pydoll-cli --output json --session agent-run wait --selector ".content"
 pydoll-cli --output json --session agent-run query "h1"
 
 # 3. Stop it when done (the browser is detached; it will outlive your CLI run)
@@ -26,6 +27,8 @@ pydoll-cli --output json session stop agent-run
 ```
 
 **`--output json` is a global flag — it must come BEFORE the subcommand**, not after. `pydoll-cli session start agent-run --output json` fails with "No such option: --output". Same goes for `--session`. Get the order right once and the rest is muscle memory.
+
+**For SPA-heavy work, start the session with `--page-load-state interactive`.** Returns from `get` as soon as DOMContentLoaded fires (~2–5× faster than waiting for full `load`). You then chain a `wait --selector` or `wait --stable-ids` to gate on the actual content you need. This pattern is the 0.2.0-shaped default for sites like LinkedIn, Twitter, Kayak, Expedia.
 
 **`--output json` is a stable contract.** Every command emits one JSON document on stdout. Stderr has logs/progress — ignore it.
 
@@ -52,6 +55,15 @@ Pass `--session NAME --output json` on every call below (omitted here for brevit
 | `tabs list \| new --url URL \| close --target-id ID \| focus INDEX` | Multi-tab control | see below |
 | `cookies get \| set --file cookies.json \| clear` | Cookie jar | array / ack |
 | `session start \| stop \| list \| info NAME` | Session lifecycle | see start shape above |
+| `wait --selector S \| --network-idle \| --url-contains S \| --page-event E \| --js EXPR \| --stable-ids "S\|ATTR"` | Block until a page condition is satisfied (overall `--wait N` timeout) | `{"ready":true,"ms":N,"matched":...}` |
+| `get URL --wait-for SELECTOR --wait N` | Navigate AND wait for a selector (one round-trip) | `{"url","title","wait_for"}` |
+| `keyboard press KEY [--modifiers M[,M]] \| hotkey K1 K2 [K3] \| type "text" [--humanize] \| down KEY \| up KEY` | Page-level key input | `{"pressed"\|"hotkey"\|"typed":...}` |
+| `mouse move X Y \| click X Y [--button B] [--double] \| drag X1 Y1 X2 Y2 \| hover SELECTOR` | Coordinate-based mouse input | `{"clicked":[X,Y],"button":...}` etc. |
+| `scroll --by-y N \| --to-y N \| --to-bottom [--max-loops N] [--idle-ms M] \| --to-selector S` | Page scrolling, including infinite-scroll loops | `{"scrolled":{...}}` |
+| `upload SELECTOR FILE [FILE...] [--via-chooser]` | Set files on `<input type=file>` (default) or via the file-chooser dialog (`--via-chooser`) | `{"selector","files","via_chooser"}` |
+| `batch URL [URL...] [--screenshot-dir D] [--source-dir D] [--query S] [--concurrency N]` | Visit many URLs in parallel tabs (one tab per URL, asyncio.gather) | `[{"url","title","screenshot","query_result","error"},...]` |
+| `network watch [--max-events N] [--kind {request,response,both}] [--filter STR]` | Stream NDJSON events to stdout until SIGINT or `--max-events` | one JSON per line |
+| `cloudflare auto-solve [--duration N] [--captcha-timeout N]` | Background Turnstile solver — pair with `--session` and let other CLI calls drive the same browser | `{"auto_solve":"stopped"}` on exit |
 
 For any flag you're unsure about: `pydoll-cli <command> --help`. It always has a concrete example.
 
@@ -174,42 +186,22 @@ pydoll-cli --output json --session s eval --script \
   '(async () => (await fetch("/api/me")).status)()'
 ```
 
-### 12. `get URL` does NOT wait for SPA hydration
+### 12. SPA hydration: pick the right wait primitive
 
-It waits for the navigation event, not for React/Vue/etc. to render. On modern SPAs (LinkedIn, Twitter, most dashboards), `get` returns while `document.body.innerText` is still ~50 lines of skeleton/nav. Patterns:
+`get URL` returns when navigation fires, not when React/Vue/etc. has rendered. On modern SPAs (LinkedIn, Twitter, most dashboards), `get` returns while `document.body.innerText` is still ~50 lines of skeleton/nav. Decision tree:
 
-- **Cheap and works:** `sleep 3 && eval "..."`. Crude but reliable for known-fast pages.
-- **Heavy aggregators want 20–30s, not 3.** Flight/hotel/listing aggregators (Kayak, Expedia, Booking, Skyscanner) progressively populate results from multiple back-ends. A `sleep 13` returned `0 of N flights` on Kayak result pages where `sleep 25` returned the actual cheapest fare. If you're getting empty/partial results from one of these sites, **don't conclude "no flights" — extend the wait**, or better, poll.
-- **Better:** poll for the content selector to exist, then extract. Single-quote the bash string so JS keeps its raw `"` (per gotcha #11):
-  ```bash
-  pydoll-cli --output json --session s eval --script '
-    new Promise(res => {
-      const start = Date.now();
-      const tick = () => document.querySelectorAll("a[href*=\"/in/\"]").length > 5
-        ? res({ready:true, ms:Date.now()-start})
-        : Date.now()-start > 8000 ? res({ready:false}) : setTimeout(tick, 200);
-      tick();
-    })
-  '
-  ```
-  pydoll-cli **does** await Promises returned from `eval --script`.
-- **Best for aggregators: poll on a *stability* signal, not just presence.** Aggregators show partial results within seconds and keep adding. Wait until either (a) a progress indicator disappears, or (b) the result count stops growing for ~2s:
-  ```bash
-  pydoll-cli --output json --session s eval --script '
-    new Promise(res => {
-      let last = -1, stable = 0, start = Date.now();
-      const tick = () => {
-        const n = document.querySelectorAll("[class*=resultWrapper], [data-resultid]").length;
-        if (n > 0 && n === last) stable++; else { stable = 0; last = n; }
-        if (stable >= 4) return res({ready: true, count: n, ms: Date.now()-start});  // ~2s stable
-        if (Date.now() - start > 35000) return res({ready: false, count: n});
-        setTimeout(tick, 500);
-      };
-      tick();
-    })
-  '
-  ```
-- For static-pagination SPAs, **don't bother scrolling unless you've confirmed lazy-load**. A reflexive `window.scrollTo(0, document.body.scrollHeight)` cost me ~30s across a 25-page run on a page where all 10 cards were already rendered.
+- **Static or fast page:** just `get URL` (default).
+- **SPA where you only need the DOM tree:** start the session with `--page-load-state interactive` (~2–5× faster on JS-heavy pages).
+- **Wait for content right after navigation:** `get URL --wait-for ".content" --wait 30` (one round-trip).
+- **Wait between commands:** `wait --selector ".content" --wait 30` — uses `tab.query` polling; supports `--count N` for "at least N matches".
+- **Wait for SPA route change after a click:** `wait --url-contains /dashboard --wait 10`.
+- **Wait for a CDP page event:** `wait --page-event {load,dom-content,frame-navigated}`.
+- **Aggregator with progressive results (Kayak/Expedia/Booking/Skyscanner):** `wait --stable-ids ".result|data-id" --stable-ms 2000 --wait 35`. Counts unique IDs and resolves when no new ones appear for `--stable-ms`. Far better than polling on raw count — count goes flat between batches even while data is still loading.
+- **Network settled** (use only when no selector/URL signal exists — Playwright's docs explicitly discourage networkidle): `wait --network-idle --idle-ms 500`.
+- **Wait for arbitrary JS to become truthy:** `wait --js 'document.readyState === "complete" && window.app.ready'` (server-side Promise loop, single CDP call).
+- **Last resort, only if none of the above fits:** `eval --script` with your own Promise. `eval` awaits Promises and exits 7 on JS error (gotcha #11).
+
+For static-pagination SPAs, **don't scroll just-in-case**. If `document.body.scrollHeight` doesn't grow after a `scroll --by-y 1000`, the page wasn't lazy-loading — you wasted seconds.
 
 ### 13. For paginated SPAs, prefer URL params over clicking "Next"
 
@@ -221,7 +213,7 @@ Most search/list SPAs accept `?page=N` (or `?cursor=`, `?offset=`) directly. Goi
 
 Only fall back to clicking pagination controls when the URL truly doesn't carry pagination state (rare). Stop conditions: empty result list, OR the first item URL on page N matches page N-1 (some sites clamp instead of erroring past the last page — LinkedIn does this).
 
-### 14. For logged-in scraping, consider `pydoll-cli request` over DOM scraping
+### 14. For list/feed scraping: `pydoll-cli request` is the right default
 
 `request` reuses the browser's cookies, so any internal JSON API the site already calls is reachable directly:
 ```bash
@@ -230,7 +222,47 @@ pydoll-cli --output json --session s request GET 'https://site.com/api/endpoint?
 ```
 Returns `{status, json, ...}` — no DOM parsing, no hydration waits, ~10× faster for paginated lists. Catch is finding the endpoint: open DevTools Network tab in the user's browser, filter to XHR, copy the request. For LinkedIn/Twitter/etc., the endpoints exist but may need additional headers (`csrf-token`, `x-li-track`) — get these from a real browser request first.
 
-DOM scraping is still right when: (a) the site renders entirely server-side, (b) you can't get the auth headers right, or (c) it's a one-shot.
+**For virtualized lists** (React virtual-scroll, infinite scroll), DOM scraping is unreliable because rows recycle as you scroll — `query --all` returns a sliding window, not the full list. Use `request` against the underlying API. If you must use the DOM, gate on `wait --stable-ids` (not stable-count — count stays flat *between* batches while new data is still loading).
+
+DOM scraping is still right when: (a) the site renders entirely server-side, (b) you can't reverse the auth headers, or (c) it's a one-shot of a single page.
+
+### 15. Iframes: just write the selector through them
+
+pydoll auto-splits selectors at `iframe`. No need to switch frames manually:
+```bash
+pydoll-cli --session s query "iframe[src*=checkout] > #pay-button"
+pydoll-cli --session s query "iframe.outer > iframe.inner > .content"
+```
+Works for both CSS combinators and XPath. See pydoll iframe docs for the full split rules.
+
+### 16. `wait`/`query --wait N` is presence, not interactivity
+
+Unlike Playwright, pydoll's `query` / `click` / `type --wait N` polls for the element to *exist in the DOM*. It does NOT verify visibility, enablement, animation stability, or that the element actually receives events.
+
+Symptom: `click` runs (exit 0) but the page doesn't react. Cause: element exists but is hidden behind a modal, disabled, or still animating in.
+
+Fix: chain a JS check before the click:
+```bash
+pydoll-cli --session s wait --js '!!document.querySelector(".btn:not([disabled])")'
+pydoll-cli --session s click ".btn"
+```
+
+### 17. Mouse / keyboard / scroll have their own command groups
+
+For coordinate-based clicks (canvas, drag-and-drop, hover-only menus) use `mouse click X Y` / `mouse drag` / `mouse hover SELECTOR` — *don't* `eval` `tab.mouse`. For global hotkeys (Ctrl+S, F12) use `keyboard hotkey CONTROL S` / `keyboard press F5` / `keyboard type "text" [--humanize]`. For infinite scroll use `scroll --to-bottom --max-loops 10 --idle-ms 800` (loops until `scrollHeight` stops growing) — *don't* hand-roll `window.scrollTo` in `eval`. `--help` on each for full flags.
+
+### 18. Parallel scraping: `batch` instead of N sequential `get`s
+
+Scraping 10 URLs sequentially via `--session` + `get` costs ~10× the per-page time. `batch` opens one tab per URL, drives them in parallel via `asyncio.gather`, and returns one record per URL with title / screenshot / query_result / error:
+```bash
+pydoll-cli --output json batch https://a.com https://b.com https://c.com \
+  --query "h1" --concurrency 3 --screenshot-dir shots/
+```
+~10× speedup vs sequential for unrelated URLs. Use a single `--session` with `wait` between calls when the URLs need to share cookies / state.
+
+### 19. File uploads: `upload`, not `eval`
+
+For a visible file input: `pydoll-cli --session s upload 'input[type=file]' /path/to/a.png /path/to/b.png`. For hidden inputs behind a styled button (the common React/Tailwind pattern), pass `--via-chooser` and SELECTOR becomes the *button*: `pydoll-cli --session s upload '.upload-btn' /path/to/a.png --via-chooser`. The CLI clicks the button inside an `expect_file_chooser()` context that sets the files when the dialog opens.
 
 ## Attached sessions: driving the user's logged-in Chrome
 
@@ -260,6 +292,8 @@ pydoll-cli --browser wavebox --output json session start work --share-profile --
 ```
 Don't try to `--no-attach` against Wavebox — its app-level onboarding blocks fresh launches.
 
+**Proxied research?** Add `--webrtc-leak-protection` (enables pydoll's WebRTC suppression). Otherwise WebRTC reveals the real IP independently of the HTTP proxy — a known fingerprinting hole.
+
 **Confirm you're authenticated** before doing real work (a dev-tools-disabled login wall returns ~3KB of skeleton HTML that looks like nothing went wrong):
 ```bash
 pydoll-cli --output json --session s eval --script \
@@ -276,6 +310,10 @@ pydoll-cli --output json --session s eval --script \
 - **Don't** guess selectors forever. If `query`/`click` returns "not found", inspect `source` or `eval` the DOM — the page is usually just different than you assumed.
 - **Don't** scroll just-in-case. If the page renders all items in the initial DOM (most search/list pages with explicit pagination), scrolling adds latency for nothing. Verify lazy-load is real first (check `document.body.scrollHeight` before/after a scroll, or `document.querySelectorAll(".item").length`).
 - **Don't** wire JS-error checks around `.value.subtype == "error"` anymore — `eval` exits 7 on a JS exception (since 0.1.6) and the description is on stderr.
+- **Don't** write Promise-polling loops in `eval` for SPA waits. Use `wait --selector` / `--stable-ids` / `--network-idle` / `--js`. The `eval`-Promise pattern is a 0.1.x escape hatch.
+- **Don't** `eval` `tab.keyboard.press` / `tab.mouse.click`. Use `keyboard press` / `mouse click`.
+- **Don't** hand-roll `window.scrollTo(0, document.body.scrollHeight)` in `eval` for infinite scroll. Use `scroll --to-bottom --max-loops N --idle-ms M`.
+- **Don't** drive 10 URLs sequentially with `get` when they're independent. Use `batch URL URL URL --query "..."`.
 - **Don't** conclude "no results" from a single short wait on an aggregator (Kayak/Expedia/Booking/Skyscanner). These sites return `0 of N` for tens of seconds before populating. Poll for stability (gotcha #12) before declaring a route empty.
 
 ## When this skill is installed from the pydoll-cli repo

@@ -4,6 +4,87 @@ All notable changes to pydoll-cli are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-05-03
+
+The SPA-hydration release. Closes the largest functionality gap in 0.1.x:
+agents had to roll Promise-polling loops in `eval` to wait for SPAs to
+render. Now there's a first-class `wait` command with selector / network-idle
+/ URL / page-event / JS / stable-ids modes, plus the keyboard / mouse /
+scroll / upload / batch primitives the CLI was missing.
+
+### Added
+
+- **`wait` command (centerpiece).** One flat command with mutually-exclusive
+  modes: `--selector S [--count N]`, `--network-idle [--idle-ms 500]
+  [--max-inflight 0]`, `--url-contains STR`, `--page-event {load,dom-content,
+  frame-navigated}`, `--js EXPR`, `--stable-ids "SELECTOR|ATTR" [--stable-ms
+  2000]`. Shared `--wait N` overall timeout. Output `{"ready": true, "ms": N,
+  "matched": …}`; exits **3** on timeout. The `--stable-ids` mode is the
+  recommended pattern for aggregator sites (Kayak/Expedia/Booking) where
+  results progressively populate.
+- **`get URL --wait-for SELECTOR --wait N`.** Combine navigation and wait in
+  one round-trip. Exits **4** if the selector never appears.
+- **`--page-load-state {complete,interactive}` global flag.** Maps to pydoll
+  `PageLoadState`. `interactive` (DOMContentLoaded) returns ~2–5× faster on
+  JS-heavy pages than the default `complete` (full load event). Pair with
+  `wait --selector` for SPA work.
+- **`--webrtc-leak-protection` global flag.** Enables pydoll's WebRTC
+  suppression — closes the IP-leak side-channel that bypasses the HTTP proxy.
+- **`keyboard` group.** `press KEY [--modifiers M[,M]] [--interval-ms N]`,
+  `hotkey K1 K2 [K3]` (max 3 keys per pydoll), `down KEY` / `up KEY`,
+  `type "text" [--humanize]`. CLI accepts both `CONTROL` and `CTRL` (and
+  `CMD`/`META`, `OPT`/`ALT`).
+- **`mouse` group.** `move X Y`, `click X Y [--button B] [--double]`,
+  `drag X1 Y1 X2 Y2`, `hover SELECTOR`. All accept `--humanize` for curved
+  cursor paths.
+- **`scroll` command.** `--by-y N` (negative = up), `--to-y N` (absolute, via
+  `window.scrollTo`), `--to-bottom [--max-loops N] [--idle-ms M]` (loops on
+  infinite-scroll pages until `scrollHeight` stops growing), `--to-selector S`
+  (uses `element.scroll_into_view`). All accept `--humanize`.
+- **`upload SELECTOR FILE [FILE...]`.** Default mode calls
+  `element.set_input_files`. With `--via-chooser`, SELECTOR is a button and
+  the CLI clicks it inside an `expect_file_chooser()` context.
+- **`batch URL [URL...]`.** Parallel multi-tab driver via `asyncio.gather`.
+  Flags: `--screenshot-dir DIR`, `--source-dir DIR`, `--query SELECTOR`,
+  `--concurrency N` (default min(num URLs, 10)). One JSON record per URL.
+- **`network watch`.** Streaming NDJSON variant of `network logs` — emits one
+  event per line as they happen. Runs until SIGINT or `--max-events N`. Flags:
+  `--kind {request,response,both}`, `--filter SUBSTR`.
+- **`cloudflare auto-solve [--duration N]`.** Long-running auto-solver.
+  Pair with `--session NAME`: this command keeps the captcha callback
+  registered while *another* CLI invocation drives the same browser.
+- **Internal helper:** `wait_for_event(tab, event_name, *, predicate, timeout)`
+  in `async_runner.py` — generic CDP event subscription for any future
+  event-driven command.
+
+### Changed
+
+- **SKILL.md substantially rewritten.** Gotcha #12 (SPA hydration) replaces
+  the long Promise-polling examples with a decision tree pointing at the
+  right `wait` mode for each scenario. Five new gotchas: #15 (iframe
+  auto-split), #16 (actionability gap — pydoll waits for presence, not
+  visibility/enablement), #17 (use the new `mouse`/`keyboard`/`scroll`
+  commands instead of `eval`), #18 (`batch` for parallel scraping), #19
+  (`upload` modes). Quick-reference table extended with the 0.2.0 commands.
+  Anti-patterns list updated.
+- **README** feature-overview table reflects new commands and global flags;
+  Quick-start gains SPA / `wait` / `batch` examples.
+- **AGENTS.md** JSON-shape catalog gains entries for every new command.
+
+### Notes
+
+- `wait --network-idle` is implemented via Network domain event subscription
+  with an in-flight set and configurable idle window. Per Playwright's
+  documented stance, `networkidle` is discouraged when a selector signal is
+  available — use `--selector` or `--stable-ids` first.
+- `keyboard.hotkey` accepts at most 3 keys per pydoll's API.
+- `cloudflare auto-solve start`/`stop` was originally planned as two
+  subcommands. Reduced to a single blocking `auto-solve` because the CLI's
+  per-invocation lifetime would invalidate the start/stop split (callbacks
+  die when the process exits).
+- `--pre-click-delay` (planned for 0.1.6) was skipped; pydoll 2.22 ignores
+  the underlying `time_before_click` parameter.
+
 ## [0.1.6] — 2026-05-03
 
 P0 bug fixes — every CLI flag now does what its `--help` says.

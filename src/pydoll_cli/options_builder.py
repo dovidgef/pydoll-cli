@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pydoll.browser.options import ChromiumOptions
+from pydoll.constants import PageLoadState
 
 from pydoll_cli import browsers
 from pydoll_cli.context import GlobalOptions
@@ -20,6 +21,14 @@ def build_options(opts: GlobalOptions) -> ChromiumOptions:
         options.binary_location = str(browsers.require(opts.browser))
 
     options.headless = opts.headless
+
+    if opts.webrtc_leak_protection:
+        options.webrtc_leak_protection = True
+    if opts.page_load_state == 'interactive':
+        options.page_load_state = PageLoadState.INTERACTIVE
+    elif opts.page_load_state == 'complete':
+        options.page_load_state = PageLoadState.COMPLETE
+    # Any other value already validated in cli.py.
 
     if opts.user_data_dir is not None:
         options.add_argument(f'--user-data-dir={opts.user_data_dir}')

@@ -22,6 +22,8 @@ class GlobalOptions:
     incognito: bool = False
     proxy: str | None = None
     proxy_insecure: bool = False  # Adds --ignore-certificate-errors for authenticated proxies.
+    webrtc_leak_protection: bool = False
+    page_load_state: str = 'complete'  # 'complete' | 'interactive' (per pydoll PageLoadState)
     user_agent: str | None = None
     accept_languages: str | None = None
     window_size: str | None = None

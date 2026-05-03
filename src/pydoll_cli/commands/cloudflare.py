@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from pathlib import Path
 from typing import Annotated
 
@@ -80,3 +81,57 @@ async def bypass(
         print(html)
     else:
         printer.emit(result)
+
+
+@group_app.command(
+    'auto-solve',
+    help=(
+        'Register the Cloudflare auto-solver and stay alive until SIGINT or --duration. '
+        'Most useful with --session: another CLI invocation drives the same browser '
+        'through the session, while this one solves any Turnstile challenges that pop up.'
+    ),
+    epilog=(
+        'Examples:\n'
+        '  # In one terminal: keep the auto-solver running on the session.\n'
+        '  pydoll-cli --session s cloudflare auto-solve\n'
+        '  # In another terminal: drive the same session normally.\n'
+        '  pydoll-cli --session s get https://protected-site.com\n'
+        '  # Or: bounded duration.\n'
+        '  pydoll-cli --session s cloudflare auto-solve --duration 300\n'
+    ),
+)
+@run_async
+async def auto_solve(
+    ctx: typer.Context,
+    duration: Annotated[
+        float,
+        typer.Option(
+            '--duration',
+            help='Seconds to stay registered (0 = until SIGINT).',
+        ),
+    ] = 0,
+    captcha_timeout: Annotated[
+        float,
+        typer.Option(
+            '--captcha-timeout',
+            help='Per-challenge widget detection timeout (default 5).',
+        ),
+    ] = 5.0,
+) -> None:
+    opts: GlobalOptions = ctx.obj
+    printer = Printer(opts)
+    async with open_browser(opts) as (_browser, tab):
+        await tab.enable_auto_solve_cloudflare_captcha(time_to_wait_captcha=captcha_timeout)
+        printer.info(
+            'Cloudflare auto-solver active'
+            + (f' for {duration:g}s' if duration > 0 else ' (Ctrl-C to stop)'),
+        )
+        try:
+            if duration > 0:
+                await asyncio.sleep(duration)
+            else:
+                await asyncio.Event().wait()
+        finally:
+            with contextlib.suppress(Exception):
+                await tab.disable_auto_solve_cloudflare_captcha()
+    printer.emit({'auto_solve': 'stopped', 'duration': duration if duration > 0 else None})

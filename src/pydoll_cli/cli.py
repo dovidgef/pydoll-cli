@@ -13,6 +13,7 @@ from typing import Annotated
 import typer
 
 from pydoll_cli import __version__
+from pydoll_cli.commands import batch as batch_cmd
 from pydoll_cli.commands import browsers as browsers_cmd
 from pydoll_cli.commands import (
     bundle as bundle_cmd,
@@ -42,6 +43,12 @@ from pydoll_cli.commands import (
     install_skill as install_skill_cmd,
 )
 from pydoll_cli.commands import (
+    keyboard as keyboard_cmd,
+)
+from pydoll_cli.commands import (
+    mouse as mouse_cmd,
+)
+from pydoll_cli.commands import (
     navigate as navigate_cmd,
 )
 from pydoll_cli.commands import (
@@ -63,6 +70,9 @@ from pydoll_cli.commands import (
     screenshot as screenshot_cmd,
 )
 from pydoll_cli.commands import (
+    scroll as scroll_cmd,
+)
+from pydoll_cli.commands import (
     session as session_cmd,
 )
 from pydoll_cli.commands import (
@@ -79,6 +89,12 @@ from pydoll_cli.commands import (
 )
 from pydoll_cli.commands import (
     type_ as type_cmd,
+)
+from pydoll_cli.commands import (
+    upload as upload_cmd,
+)
+from pydoll_cli.commands import (
+    wait as wait_cmd,
 )
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.output import configure_logging
@@ -161,6 +177,28 @@ def main(
             ),
         ),
     ] = False,
+    webrtc_leak_protection: Annotated[
+        bool,
+        typer.Option(
+            '--webrtc-leak-protection',
+            help=(
+                'Enable pydoll WebRTC leak protection. Recommended when proxying — '
+                'WebRTC otherwise reveals the real IP independently of the HTTP proxy.'
+            ),
+        ),
+    ] = False,
+    page_load_state: Annotated[
+        str,
+        typer.Option(
+            '--page-load-state',
+            help=(
+                'When to consider a navigation complete. "interactive" returns as soon '
+                'as DOMContentLoaded fires (~2-5x faster on JS-heavy pages); '
+                '"complete" (default) waits for the full load event.'
+            ),
+            case_sensitive=False,
+        ),
+    ] = 'complete',
     user_agent: Annotated[
         str | None,
         typer.Option('--user-agent', help='Override User-Agent (Client Hints auto-synced).'),
@@ -261,6 +299,12 @@ def main(
     output_lc = output.lower()
     if output_lc not in ('text', 'json'):
         raise typer.BadParameter(f'--output must be "text" or "json" (got {output!r})')
+    page_load_state_lc = page_load_state.lower()
+    if page_load_state_lc not in ('complete', 'interactive'):
+        raise typer.BadParameter(
+            f'--page-load-state must be "complete" or "interactive" '
+            f'(got {page_load_state!r})',
+        )
 
     opts = GlobalOptions(
         browser=browser_lc,  # type: ignore[arg-type]
@@ -270,6 +314,8 @@ def main(
         incognito=incognito,
         proxy=proxy,
         proxy_insecure=proxy_insecure,
+        webrtc_leak_protection=webrtc_leak_protection,
+        page_load_state=page_load_state_lc,
         user_agent=user_agent,
         accept_languages=accept_languages,
         window_size=window_size,
@@ -303,6 +349,8 @@ app.add_typer(har_cmd.group_app, name='har')
 app.add_typer(network_cmd.group_app, name='network')
 app.add_typer(cloudflare_cmd.group_app, name='cloudflare')
 app.add_typer(tabs_cmd.group_app, name='tabs')
+app.add_typer(keyboard_cmd.group_app, name='keyboard')
+app.add_typer(mouse_cmd.group_app, name='mouse')
 
 # Flat commands
 navigate_cmd.register(app)
@@ -322,3 +370,7 @@ run_cmd.register(app)
 info_cmd.register(app)
 browsers_cmd.register(app)
 install_skill_cmd.register(app)
+wait_cmd.register(app)
+scroll_cmd.register(app)
+upload_cmd.register(app)
+batch_cmd.register(app)

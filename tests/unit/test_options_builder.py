@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydoll.constants import PageLoadState
 
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.options_builder import build_options
@@ -88,6 +89,26 @@ def test_proxy_insecure_does_not_duplicate():
         ),
     )
     assert options.arguments.count('--ignore-certificate-errors') == 1
+
+
+def test_webrtc_leak_protection_propagates():
+    options = build_options(GlobalOptions(webrtc_leak_protection=True))
+    assert options.webrtc_leak_protection is True
+
+
+def test_webrtc_leak_protection_off_by_default():
+    options = build_options(GlobalOptions())
+    assert options.webrtc_leak_protection is False
+
+
+def test_page_load_state_interactive():
+    options = build_options(GlobalOptions(page_load_state='interactive'))
+    assert options.page_load_state == PageLoadState.INTERACTIVE
+
+
+def test_page_load_state_complete_default():
+    options = build_options(GlobalOptions())
+    assert options.page_load_state == PageLoadState.COMPLETE
 
 
 def test_browser_binary_overrides_kind(tmp_path: Path):
