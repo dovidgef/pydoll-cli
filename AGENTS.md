@@ -161,6 +161,18 @@ Streams one JSON document per line (NDJSON), not a single document. Each line is
 ### `cloudflare auto-solve`
 Long-running. Emits a final `{"auto_solve": "stopped", "duration": N or null}` on exit.
 
+### `network block` / `mock` / `inject-header` / `fail`
+Wrap pattern — these commands spawn the inner command as a subprocess and
+emit whatever the inner command emits. The wrapping command itself prints
+nothing on stdout (logs go to stderr). Exit code is the inner command's
+exit code (or 2 if `--session`/`--connect` is missing, or 2 on bad args).
+
+```bash
+pydoll-cli --session s network block -t Image -t Stylesheet \
+  -- get https://heavy-site.com
+# stdout: {"url":"https://heavy-site.com","title":"..."}   <- from `get`
+```
+
 ### `extract`
 With the schema's model. One record, or a list when `--all`.
 ```json

@@ -4,6 +4,57 @@ All notable changes to pydoll-cli are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-05-03
+
+The network-interception release. Four new `network` subcommands wrap CDP's
+Fetch domain so an agent can block, mock, or fail requests for the duration
+of an inner command — the testing-side complement to `request`.
+
+### Added
+
+- **`network block -t TYPE [-t TYPE...] -- CMD ARGS`.** Block matching
+  resource types (`Image`, `Stylesheet`, `Font`, `Script`, `Media`, `XHR`,
+  `Fetch`, `Document`, `WebSocket`, `Manifest`, `Ping`, `Other`,
+  case-insensitive) for the inner command's lifetime. Calls
+  `fail_request(BLOCKED_BY_CLIENT)` on matches; `continue_request` on
+  everything else. Typical 2× speedup for screenshotting image-heavy pages
+  with `-t Image -t Stylesheet -t Font`.
+- **`network mock -p URL_SUBSTR --status N --body FILE [-H "K: V"]
+  -- CMD ARGS`.** Fulfill matching requests with a canned response. Body
+  bytes are base64-encoded for the CDP wire format. Matching is substring
+  on the request URL.
+- **`network inject-header -p URL_SUBSTR -H "K: V" [-H "K: V"...] -- CMD
+  ARGS`.** Merge extra request headers into matching requests
+  (`continue_request` with combined headers; new wins on collision).
+- **`network fail -p URL_SUBSTR [--reason ERR] -- CMD ARGS`.** Fail matching
+  requests with a CDP `ErrorReason` (default `TIMED_OUT`; useful values:
+  `FAILED`, `ABORTED`, `CONNECTION_REFUSED`, `NAME_NOT_RESOLVED`,
+  `BLOCKED_BY_CLIENT`).
+
+### Architectural notes
+
+- **Wrap pattern via subprocess.** All four commands require `--session
+  NAME` (or `--connect WS_URL`). The wrapping command opens a tab, enables
+  Fetch, registers the handler, then spawns the inner command as a
+  subprocess that connects to the same session. When the subprocess exits,
+  Fetch is disabled and the wrapper exits with the subprocess's return
+  code. This was the plan's option (a); option (b) — persistent session
+  interceptors stored in `~/.cache/pydoll-cli/sessions/<NAME>.json` — is
+  deferred until usage demand justifies the state-sync complexity.
+- The conventional `--` separator between the wrapping options and the
+  inner command is supported but not required (the wrapping command parses
+  with `allow_extra_args=True, ignore_unknown_options=True`).
+
+### Changed
+
+- **SKILL.md** gains gotcha #20 (network interception): wrap-pattern usage,
+  the four subcommands, when each is the right tool, the typical 2×
+  page-load speedup with `block`. Anti-patterns list grows: don't pair
+  `--disable-images` with `network block -t Image`; don't call interceptors
+  without a `--session`.
+- **CHANGELOG / README / AGENTS.md** updated with new commands and JSON
+  shapes (interceptor stdout is whatever the inner command emits).
+
 ## [0.2.0] — 2026-05-03
 
 The SPA-hydration release. Closes the largest functionality gap in 0.1.x:

@@ -78,6 +78,14 @@ pydoll-cli --session s wait --stable-ids ".result|data-id" --stable-ms 2000 --wa
 # Many independent URLs in parallel (one tab each, ~10× sequential)
 pydoll-cli --output json batch https://a.com https://b.com https://c.com \
   --query "h1" --concurrency 3
+
+# Network interception (wrap pattern): block heavy assets for one screenshot
+pydoll-cli --session s network block -t Image -t Stylesheet -t Font \
+  -- screenshot https://heavy-site.com -o shot.png
+
+# Mock an internal API while driving the page
+pydoll-cli --session s network mock -p /api/me --status 200 --body fixture.json \
+  -- get https://app.com
 ```
 
 ## Feature overview
@@ -93,6 +101,7 @@ pydoll-cli exposes the full pydoll feature set as subcommands. See `pydoll-cli <
 | Parallel            | `batch URL [URL...]` (asyncio.gather across tabs)                        |
 | Extraction          | `extract` (Pydantic schema — Python file or JSON)                        |
 | Network             | `request`, `har record`, `har replay`, `network logs`, `network watch`   |
+| Interception        | `network block`, `network mock`, `network inject-header`, `network fail` (Fetch wrap pattern) |
 | Cookies & state     | `cookies get`, `cookies set`, `cookies clear`                            |
 | Stealth / evasion   | `cloudflare bypass`, `cloudflare auto-solve`, humanized typing/clicking, `--webrtc-leak-protection` |
 | Sessions            | `session start`, `session stop`, `session list`, `session info`, `session attach` |

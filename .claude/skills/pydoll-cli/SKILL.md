@@ -64,6 +64,10 @@ Pass `--session NAME --output json` on every call below (omitted here for brevit
 | `batch URL [URL...] [--screenshot-dir D] [--source-dir D] [--query S] [--concurrency N]` | Visit many URLs in parallel tabs (one tab per URL, asyncio.gather) | `[{"url","title","screenshot","query_result","error"},...]` |
 | `network watch [--max-events N] [--kind {request,response,both}] [--filter STR]` | Stream NDJSON events to stdout until SIGINT or `--max-events` | one JSON per line |
 | `cloudflare auto-solve [--duration N] [--captcha-timeout N]` | Background Turnstile solver — pair with `--session` and let other CLI calls drive the same browser | `{"auto_solve":"stopped"}` on exit |
+| `network block -t T... -- CMD ARGS` | Block resources by type during the inner command (Image/Stylesheet/Font/...) | inner command's stdout |
+| `network mock -p URL_SUBSTR --status N --body FILE [-H K:V] -- CMD ARGS` | Stub matching requests | inner command's stdout |
+| `network inject-header -p URL_SUBSTR -H K:V... -- CMD ARGS` | Add headers to matching requests | inner command's stdout |
+| `network fail -p URL_SUBSTR [--reason R] -- CMD ARGS` | Fail matching requests with a CDP ErrorReason | inner command's stdout |
 
 For any flag you're unsure about: `pydoll-cli <command> --help`. It always has a concrete example.
 
@@ -264,6 +268,35 @@ pydoll-cli --output json batch https://a.com https://b.com https://c.com \
 
 For a visible file input: `pydoll-cli --session s upload 'input[type=file]' /path/to/a.png /path/to/b.png`. For hidden inputs behind a styled button (the common React/Tailwind pattern), pass `--via-chooser` and SELECTOR becomes the *button*: `pydoll-cli --session s upload '.upload-btn' /path/to/a.png --via-chooser`. The CLI clicks the button inside an `expect_file_chooser()` context that sets the files when the dialog opens.
 
+### 20. Network interception: wrap pattern
+
+Four interceptor commands wrap an inner command and apply CDP Fetch interception only for its duration. **All require `--session NAME`** — the inner command runs as a subprocess against the same browser:
+
+```bash
+# Block heavy resources for one request — common ~2× speedup on image-heavy pages.
+pydoll-cli --session s network block -t Image -t Stylesheet -t Font \
+  -- screenshot https://heavy-site.com -o shot.png
+
+# Mock an API endpoint (response body is the file's bytes, base64-encoded for you).
+pydoll-cli --session s network mock -p /api/me --status 200 --body fixture.json \
+  -- get https://app.com
+
+# Inject auth headers into matching requests.
+pydoll-cli --session s network inject-header -p /api/ \
+  -H "Authorization: Bearer xyz" \
+  -- request GET https://app.com/api/me
+
+# Simulate failures (default reason TIMED_OUT).
+pydoll-cli --session s network fail -p /track/ --reason CONNECTION_REFUSED \
+  -- get https://app.com
+```
+
+`-p PATTERN` is a substring match against the request URL. `-t TYPE` is one of `Document/Stylesheet/Image/Media/Font/Script/XHR/Fetch/WebSocket/...` (case-insensitive). On URL/type miss, the request continues unmodified — the wrapper only intercepts what matches.
+
+`network mock` is the testing-side complement to `request` (gotcha #14): when you want to drive the page but stub the API.
+
+The `--` separator is conventional but not required — the wrapping command captures everything after the recognized options as the inner command.
+
 ## Attached sessions: driving the user's logged-in Chrome
 
 If the user already has Chrome (or Wavebox/Edge) running with `--remote-debugging-port=9222` and wants an action performed against a **logged-in site** (Gmail, LinkedIn, internal dashboards), attach instead of launching fresh:
@@ -314,6 +347,8 @@ pydoll-cli --output json --session s eval --script \
 - **Don't** `eval` `tab.keyboard.press` / `tab.mouse.click`. Use `keyboard press` / `mouse click`.
 - **Don't** hand-roll `window.scrollTo(0, document.body.scrollHeight)` in `eval` for infinite scroll. Use `scroll --to-bottom --max-loops N --idle-ms M`.
 - **Don't** drive 10 URLs sequentially with `get` when they're independent. Use `batch URL URL URL --query "..."`.
+- **Don't** combine `--disable-images` with `network block -t Image`. The first turns image loading off via Chrome preferences; the second intercepts at the Fetch layer. Pick one — they overlap.
+- **Don't** call `network block/mock/inject-header/fail` without `--session`. The interceptor needs to share the browser with the inner command, which only works through a persistent session.
 - **Don't** conclude "no results" from a single short wait on an aggregator (Kayak/Expedia/Booking/Skyscanner). These sites return `0 of N` for tens of seconds before populating. Poll for stability (gotcha #12) before declaring a route empty.
 
 ## When this skill is installed from the pydoll-cli repo
