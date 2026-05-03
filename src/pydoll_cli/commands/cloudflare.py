@@ -45,11 +45,24 @@ async def bypass(
         float,
         typer.Option('--wait-after', help='Extra seconds to wait after bypass.'),
     ] = 2.0,
+    captcha_timeout: Annotated[
+        float,
+        typer.Option(
+            '--captcha-timeout',
+            help=(
+                'Seconds to wait for the Turnstile widget to appear before giving up '
+                '(maps to pydoll time_to_wait_captcha; default 5). Increase if the '
+                'bypass returns but the page is still on the challenge.'
+            ),
+        ),
+    ] = 5.0,
 ) -> None:
     opts: GlobalOptions = ctx.obj
     printer = Printer(opts)
     async with open_browser(opts) as (_browser, tab):
-        async with tab.expect_and_bypass_cloudflare_captcha():
+        async with tab.expect_and_bypass_cloudflare_captcha(
+            time_to_wait_captcha=captcha_timeout,
+        ):
             await tab.go_to(url, timeout=int(opts.timeout))
         if wait_after > 0:
             await asyncio.sleep(wait_after)

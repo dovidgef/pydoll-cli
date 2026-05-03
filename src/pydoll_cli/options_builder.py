@@ -27,6 +27,8 @@ def build_options(opts: GlobalOptions) -> ChromiumOptions:
         options.add_argument('--incognito')
     if opts.proxy:
         options.add_argument(f'--proxy-server={opts.proxy}')
+    if opts.proxy_insecure and '--ignore-certificate-errors' not in options.arguments:
+        options.add_argument('--ignore-certificate-errors')
     if opts.user_agent:
         options.add_argument(f'--user-agent={opts.user_agent}')
     if opts.accept_languages:

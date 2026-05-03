@@ -43,6 +43,10 @@ def register(app: typer.Typer) -> None:
             element = await tab.query(selector, timeout=wait, raise_exc=False)
             if element is None:
                 raise CliError(f'Selector not found: {selector!r}', exit_code=4)
-            await element.click() if human else await element.click_using_js()
+            if human:
+                # element.click() defaults to humanize=False (raw CDP); pass it explicitly.
+                await element.click(humanize=True)
+            else:
+                await element.click_using_js()
             after_url = await tab.current_url
         printer.emit({'clicked': selector, 'url': after_url})

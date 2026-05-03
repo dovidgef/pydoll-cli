@@ -27,9 +27,12 @@ group_app = typer.Typer(
         '  pydoll-cli session start agent-run\n'
         '  pydoll-cli session start research --no-headless --url https://example.com\n'
         '  # Attach to an already-running Chrome/Wavebox on port 9222, in an isolated\n'
-        '  # incognito context (default for Wavebox; opt-in for others):\n'
-        '  pydoll-cli session start agent-run --browser wavebox\n'
+        '  # incognito context (default for Wavebox; opt-in for others). Note: --browser\n'
+        '  # is a GLOBAL option and must come before the `session` subcommand:\n'
+        '  pydoll-cli --browser wavebox session start agent-run\n'
         '  pydoll-cli session start agent-run --attach\n'
+        "  # Pin a tab in the user's logged-in profile (shares cookies):\n"
+        '  pydoll-cli --browser wavebox session start work --share-profile --url https://...\n'
     ),
 )
 @run_async

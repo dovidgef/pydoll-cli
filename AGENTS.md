@@ -49,6 +49,7 @@ pydoll-cli session stop agent-run
 | 4    | Element not found          | Re-check selector; retry with `--wait`.                     |
 | 5    | Browser launch failed      | Check `--browser-binary` and system install.                |
 | 6    | Session not running        | `pydoll-cli session start …` first.                         |
+| 7    | JS exception in `eval`     | Read the `JS error: …` line on stderr; fix the JS.          |
 | 130  | Interrupted                | User cancelled.                                             |
 
 ## JSON output shapes (stable contract)
@@ -85,6 +86,7 @@ With `--base64`:
 {"value": "Example Domain"}
 ```
 `value` preserves the JS return type: string, number, bool, list, or object.
+Promises are awaited; on a JS exception the command exits **7** with `JS error: <description>` on stderr.
 
 ### `query`
 Single element (default):

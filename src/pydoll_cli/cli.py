@@ -39,6 +39,9 @@ from pydoll_cli.commands import (
     info as info_cmd,
 )
 from pydoll_cli.commands import (
+    install_skill as install_skill_cmd,
+)
+from pydoll_cli.commands import (
     navigate as navigate_cmd,
 )
 from pydoll_cli.commands import (
@@ -148,6 +151,16 @@ def main(
         str | None,
         typer.Option('--proxy', help='Proxy URL, scheme://user:pass@host:port.'),
     ] = None,
+    proxy_insecure: Annotated[
+        bool,
+        typer.Option(
+            '--proxy-insecure',
+            help=(
+                'Append --ignore-certificate-errors. Use with authenticated proxies '
+                '(e.g. Bright Data) that present an internal CA cert.'
+            ),
+        ),
+    ] = False,
     user_agent: Annotated[
         str | None,
         typer.Option('--user-agent', help='Override User-Agent (Client Hints auto-synced).'),
@@ -256,6 +269,7 @@ def main(
         user_data_dir=user_data_dir,
         incognito=incognito,
         proxy=proxy,
+        proxy_insecure=proxy_insecure,
         user_agent=user_agent,
         accept_languages=accept_languages,
         window_size=window_size,
@@ -307,3 +321,4 @@ shell_cmd.register(app)
 run_cmd.register(app)
 info_cmd.register(app)
 browsers_cmd.register(app)
+install_skill_cmd.register(app)

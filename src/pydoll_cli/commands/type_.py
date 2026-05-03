@@ -36,7 +36,13 @@ def register(app: typer.Typer) -> None:
         ] = False,
         delay_ms: Annotated[
             int,
-            typer.Option('--delay-ms', help='Min delay between keystrokes when --human.'),
+            typer.Option(
+                '--delay-ms',
+                help=(
+                    'Constant inter-keystroke delay in ms. Set to use a fixed cadence '
+                    'instead of --human (which uses pydoll variable-timing humanization).'
+                ),
+            ),
         ] = 50,
         wait: Annotated[int, typer.Option('--wait', help='Seconds to wait for element.')] = 5,
     ) -> None:
@@ -52,6 +58,10 @@ def register(app: typer.Typer) -> None:
             if element is None:
                 raise CliError(f'Selector not found: {selector!r}', exit_code=4)
             if human:
+                # Real humanization: variable inter-key delays + realistic typo rate.
+                await element.type_text(text, humanize=True)
+            elif delay_ms != 50:
+                # User explicitly set --delay-ms: use a constant cadence.
                 await element.type_text(text, interval=delay_ms / 1000.0)
             else:
                 await element.insert_text(text)

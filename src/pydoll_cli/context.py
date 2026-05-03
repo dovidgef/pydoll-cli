@@ -21,6 +21,7 @@ class GlobalOptions:
     user_data_dir: Path | None = None
     incognito: bool = False
     proxy: str | None = None
+    proxy_insecure: bool = False  # Adds --ignore-certificate-errors for authenticated proxies.
     user_agent: str | None = None
     accept_languages: str | None = None
     window_size: str | None = None

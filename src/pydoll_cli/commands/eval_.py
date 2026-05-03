@@ -5,13 +5,50 @@ from __future__ import annotations
 import json as _json
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
 from pydoll_cli.async_runner import open_browser, run_async
 from pydoll_cli.context import GlobalOptions
-from pydoll_cli.output import CliError, Printer
+from pydoll_cli.output import EXIT_JS_ERROR, CliError, Printer
+
+
+def _extract_eval_result(result: Any) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Pull (RemoteObject, exceptionDetails) out of pydoll's execute_script return.
+
+    Tolerates two observed shapes:
+        {'result': {'result': RemoteObject, 'exceptionDetails': ...}}  # CDP-wrapped
+        {'result': RemoteObject, 'exceptionDetails': ...}              # unwrapped
+    """
+    if not isinstance(result, dict):
+        return {}, None
+    inner = result.get('result', {})
+    if isinstance(inner, dict) and ('result' in inner or 'exceptionDetails' in inner):
+        ro = inner.get('result') or {}
+        ex = inner.get('exceptionDetails')
+    else:
+        ro = inner if isinstance(inner, dict) else {}
+        ex = result.get('exceptionDetails')
+    if not isinstance(ro, dict):
+        ro = {}
+    if ex is not None and not isinstance(ex, dict):
+        ex = None
+    return ro, ex
+
+
+def _js_error_message(ro: dict[str, Any], ex: dict[str, Any] | None) -> str:
+    if ex is not None:
+        exception = ex.get('exception')
+        if isinstance(exception, dict):
+            desc = exception.get('description') or exception.get('value')
+            if desc:
+                return str(desc)
+        text = ex.get('text')
+        if text:
+            return str(text)
+    desc = ro.get('description') or ro.get('className')
+    return str(desc) if desc else 'JavaScript exception'
 
 
 def register(app: typer.Typer) -> None:
@@ -74,9 +111,15 @@ def register(app: typer.Typer) -> None:
         async with open_browser(opts) as (_browser, tab):
             if url is not None:
                 await tab.go_to(url, timeout=int(opts.timeout))
-            result = await tab.execute_script(src, return_by_value=by_value)
-        inner = result.get('result', {}).get('result', {})
-        value = inner.get('value') if 'value' in inner else inner
+            # await_promise=True so `eval` resolves Promises returned from JS
+            # (verified to exist in pydoll-python >=2.22).
+            result = await tab.execute_script(
+                src, return_by_value=by_value, await_promise=True,
+            )
+        ro, ex = _extract_eval_result(result)
+        if ex is not None or ro.get('subtype') == 'error':
+            raise CliError(f'JS error: {_js_error_message(ro, ex)}', exit_code=EXIT_JS_ERROR)
+        value = ro.get('value') if 'value' in ro else ro
         if opts.output == 'json':
             printer.emit({'value': value})
         elif isinstance(value, (dict, list)):

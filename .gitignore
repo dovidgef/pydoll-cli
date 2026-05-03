@@ -49,3 +49,6 @@ Thumbs.db
 
 # Local session state (shouldn't be committed anyway, but belt-and-suspenders)
 /sessions/
+
+# Claude Code project-local permission grants (never share these)
+.claude/settings.local.json

@@ -70,6 +70,26 @@ def test_in_container_adds_sandbox_bypass():
     assert '--disable-dev-shm-usage' in options.arguments
 
 
+def test_proxy_insecure_adds_ignore_cert_errors():
+    options = build_options(GlobalOptions(proxy_insecure=True))
+    assert '--ignore-certificate-errors' in options.arguments
+
+
+def test_proxy_insecure_off_by_default():
+    options = build_options(GlobalOptions())
+    assert '--ignore-certificate-errors' not in options.arguments
+
+
+def test_proxy_insecure_does_not_duplicate():
+    options = build_options(
+        GlobalOptions(
+            proxy_insecure=True,
+            extra_args=['--ignore-certificate-errors'],
+        ),
+    )
+    assert options.arguments.count('--ignore-certificate-errors') == 1
+
+
 def test_browser_binary_overrides_kind(tmp_path: Path):
     fake = tmp_path / 'chrome'
     fake.write_text('')

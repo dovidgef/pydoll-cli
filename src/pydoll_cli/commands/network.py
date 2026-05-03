@@ -41,6 +41,17 @@ async def logs(
         str | None,
         typer.Option('--filter', help='Substring filter on request URL.'),
     ] = None,
+    full: Annotated[
+        bool,
+        typer.Option(
+            '--full/--slim',
+            help=(
+                'Slim emits {url,method,request_id} per record (default). '
+                'Full emits the entire CDP event params dict (type, headers, '
+                'timestamps, initiator, etc.).'
+            ),
+        ),
+    ] = False,
 ) -> None:
     opts: GlobalOptions = ctx.obj
     printer = Printer(opts)
@@ -54,12 +65,15 @@ async def logs(
             events = await tab.get_network_logs(filter=filter)
         finally:
             await tab.disable_network_events()
-    out = [
-        {
-            'url': e['params'].get('request', {}).get('url'),
-            'method': e['params'].get('request', {}).get('method'),
-            'request_id': e['params'].get('requestId'),
-        }
-        for e in events
-    ]
+    if full:
+        out = [e.get('params', {}) for e in events]
+    else:
+        out = [
+            {
+                'url': e['params'].get('request', {}).get('url'),
+                'method': e['params'].get('request', {}).get('method'),
+                'request_id': e['params'].get('requestId'),
+            }
+            for e in events
+        ]
     printer.emit(out)
