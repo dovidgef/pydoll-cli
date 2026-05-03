@@ -4,6 +4,67 @@ All notable changes to pydoll-cli are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-05-03
+
+Bug-fix + small-ergonomic release surfaced by an end-to-end demo run of 0.3.0.
+
+### Fixed
+
+- **`mouse hover SELECTOR`.** The bound-script used the undefined identifier
+  `argument` and lacked an explicit `return`, so every hover failed with
+  `hover: failed to read element bounds`. Now uses `element.execute_script`
+  with `this` and an explicit `return [cx, cy]`.
+- **`network watch --max-events N`.** Could overshoot the cap because the
+  emit closure decided the cap *after* writing — handler invocations that
+  raced past the limit kept emitting. Now gates emission on the counter at
+  the top of `_emit`, so the cap is exact.
+- **`wait --page-event load|dom-content` race on already-fired events.**
+  `LoadEventFired` / `DomContentEventFired` are *next-event* signals; a
+  fresh listener after the page already finished loading would hang for the
+  next nav that never came. Pre-checks `document.readyState` and resolves
+  immediately when the page is already past the milestone (returns
+  `{"event": "load", "already": "complete"}`). `frame-navigated` is unchanged
+  — it remains a "next navigation" listener.
+
+### Added
+
+- **`text --selector S --all`.** Returns text from every match instead of
+  just the first one. JSON shape switches from `{"text": "..."}` to
+  `{"texts": [...], "count": N}`. Without `--all`, behavior is unchanged.
+
+### Documentation (Claude Code skill)
+
+`SKILL.md` gap-closure based on the same demo run:
+
+- `request` runs as `fetch()` from the current tab's page context, so the
+  page's CSP applies. Strict `connect-src` (HN, GitHub, etc.) blocks
+  cross-origin fetches with `TypeError: Failed to fetch` even when the
+  target accepts CORS — workaround: navigate to a permissive page first
+  (`example.com`); cookies for the target host follow the target host's
+  jar, so the detour costs no auth.
+- `network mock` cross-origin must include `Access-Control-Allow-Origin`
+  in the response headers — the browser still CORS-checks fulfilled
+  responses, so the synthetic body bounces with `TypeError: Failed to fetch`
+  otherwise. Same-origin mocks don't need it.
+- `tabs new --url ...` does not auto-focus. Subsequent `--session NAME`
+  calls without `--tab N` / `--tab-url SUBSTR` keep targeting the previous
+  tab; pin with `--tab-url` (stable across the session) per call.
+- `screenshot --full-page` first-call hang on Chrome 146 with
+  `--page-load-state interactive` — the renderer hasn't laid out content
+  beyond the viewport yet. Wait for `document.readyState === 'complete'`
+  before the capture.
+- **Headless + bot-protected sites: spoof the UA at session-start.**
+  Headless Chrome's default User-Agent contains the literal token
+  `HeadlessChrome/...`, which heavily-protected destinations match in a
+  one-line check. Fix: `--user-agent` global flag with a clean current
+  Chrome desktop UA. Headed mode strips the token automatically.
+
+### Tests
+
+- 3 new unit tests for `wait --page-event` auto-resolve (load on `complete`,
+  dom-content on `interactive`, fall-through to listener when `loading`).
+- 177 → 180 passing.
+
 ## [0.3.0] — 2026-05-03
 
 The network-interception release. Four new `network` subcommands wrap CDP's
