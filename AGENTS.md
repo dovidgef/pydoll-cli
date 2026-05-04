@@ -80,6 +80,10 @@ With `--base64`:
 ```json
 {"text": "Example Domain\nThis domain is for use in…"}
 ```
+With `--selector S --all`:
+```json
+{"texts": ["First", "Second", "Third"], "count": 3}
+```
 
 ### `eval`
 ```json
@@ -116,7 +120,9 @@ With `--all`:
 ```
 `matched` shape varies by mode: `{selector,count}` for `--selector`/`--stable-ids`,
 `{inflight,idle_ms}` for `--network-idle`, `{url}` for `--url-contains`,
-`{event}` for `--page-event`, `{value}` for `--js`. Exits **3** on timeout.
+`{event}` for `--page-event` (or `{event,already}` when `load`/`dom-content`
+is already satisfied at call time — `document.readyState` pre-check),
+`{value}` for `--js`. Exits **3** on timeout.
 
 ### `keyboard press` / `hotkey` / `type` / `down` / `up`
 ```json
