@@ -171,7 +171,10 @@ def test_start_attached_tab_url_no_match_raises(opts, isolated_state_dir):
     other = _FakeTab('other-tid', url='https://example.com/')
     browser = _fake_browser([other])
 
-    with patch('pydoll_cli.session.Chrome', return_value=browser), pytest.raises(CliError) as excinfo:
+    with (
+        patch('pydoll_cli.session.Chrome', return_value=browser),
+        pytest.raises(CliError) as excinfo,
+    ):
         asyncio.run(
             session_mod.start_attached(
                 'sess',
@@ -281,10 +284,18 @@ def test_open_attached_pinned_tab_present_no_recreate(isolated_state_dir):
 
 def test_stop_attached_default_leaves_tab_alone():
     state = SessionState(
-        name='sess', pid=0, port=9222,
-        ws_url='ws://x', user_data_dir='', browser='wavebox', binary='',
-        started_at=0.0, attached=True, browser_context_id=None,
-        target_id='pinned-tid', created_target=False,
+        name='sess',
+        pid=0,
+        port=9222,
+        ws_url='ws://x',
+        user_data_dir='',
+        browser='wavebox',
+        binary='',
+        started_at=0.0,
+        attached=True,
+        browser_context_id=None,
+        target_id='pinned-tid',
+        created_target=False,
     )
     pinned = _FakeTab('pinned-tid', url='https://example.com/')
     browser = _fake_browser([pinned])
@@ -298,10 +309,18 @@ def test_stop_attached_default_leaves_tab_alone():
 
 def test_stop_attached_close_tab_closes_pinned():
     state = SessionState(
-        name='sess', pid=0, port=9222,
-        ws_url='ws://x', user_data_dir='', browser='wavebox', binary='',
-        started_at=0.0, attached=True, browser_context_id=None,
-        target_id='pinned-tid', created_target=True,
+        name='sess',
+        pid=0,
+        port=9222,
+        ws_url='ws://x',
+        user_data_dir='',
+        browser='wavebox',
+        binary='',
+        started_at=0.0,
+        attached=True,
+        browser_context_id=None,
+        target_id='pinned-tid',
+        created_target=True,
     )
     pinned = _FakeTab('pinned-tid', url='https://example.com/')
     other = _FakeTab('other-tid', url='https://other.com/')
@@ -316,10 +335,18 @@ def test_stop_attached_close_tab_closes_pinned():
 
 def test_stop_attached_incognito_always_deletes_context():
     state = SessionState(
-        name='sess', pid=0, port=9222,
-        ws_url='ws://x', user_data_dir='', browser='wavebox', binary='',
-        started_at=0.0, attached=True, browser_context_id='ctx-id',
-        target_id='pinned-tid', created_target=True,
+        name='sess',
+        pid=0,
+        port=9222,
+        ws_url='ws://x',
+        user_data_dir='',
+        browser='wavebox',
+        binary='',
+        started_at=0.0,
+        attached=True,
+        browser_context_id='ctx-id',
+        target_id='pinned-tid',
+        created_target=True,
     )
     browser = _fake_browser([])
 

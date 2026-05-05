@@ -151,9 +151,19 @@ def test_block_handler_fails_matched_continues_others():
     with _capture_handler(tab) as cap:
         result = runner.invoke(
             app,
-            ['--session', 's', 'network', 'block',
-             '-t', 'Image', '-t', 'Stylesheet',
-             '--', 'get', 'https://x.com'],
+            [
+                '--session',
+                's',
+                'network',
+                'block',
+                '-t',
+                'Image',
+                '-t',
+                'Stylesheet',
+                '--',
+                'get',
+                'https://x.com',
+            ],
         )
     assert result.exit_code == 0, result.stdout
     assert cap.inner_args == ['get', 'https://x.com']
@@ -178,8 +188,19 @@ def test_mock_missing_body_exits_2(tmp_path: Path):
     bad = tmp_path / 'nope.json'
     result = runner.invoke(
         app,
-        ['--session', 's', 'network', 'mock',
-         '-p', '/api/', '--body', str(bad), '--', 'get', 'URL'],
+        [
+            '--session',
+            's',
+            'network',
+            'mock',
+            '-p',
+            '/api/',
+            '--body',
+            str(bad),
+            '--',
+            'get',
+            'URL',
+        ],
     )
     assert result.exit_code == 2
 
@@ -191,10 +212,23 @@ def test_mock_handler_fulfills_matched(tmp_path: Path):
     with _capture_handler(tab) as cap:
         result = runner.invoke(
             app,
-            ['--session', 's', 'network', 'mock',
-             '-p', '/api/me', '--status', '200', '--body', str(body_file),
-             '-H', 'content-type: application/json',
-             '--', 'get', 'https://app.com'],
+            [
+                '--session',
+                's',
+                'network',
+                'mock',
+                '-p',
+                '/api/me',
+                '--status',
+                '200',
+                '--body',
+                str(body_file),
+                '-H',
+                'content-type: application/json',
+                '--',
+                'get',
+                'https://app.com',
+            ],
         )
     assert result.exit_code == 0, result.stdout
     assert cap.inner_args == ['get', 'https://app.com']
@@ -231,11 +265,21 @@ def test_inject_header_merges_with_existing():
     with _capture_handler(tab) as cap:
         result = runner.invoke(
             app,
-            ['--session', 's', 'network', 'inject-header',
-             '-p', '/api/',
-             '-H', 'Authorization: Bearer xyz',
-             '-H', 'x-trace=abc',
-             '--', 'get', 'https://app.com'],
+            [
+                '--session',
+                's',
+                'network',
+                'inject-header',
+                '-p',
+                '/api/',
+                '-H',
+                'Authorization: Bearer xyz',
+                '-H',
+                'x-trace=abc',
+                '--',
+                'get',
+                'https://app.com',
+            ],
         )
     assert result.exit_code == 0, result.stdout
 
@@ -259,8 +303,19 @@ def test_inject_header_merges_with_existing():
 def test_fail_unknown_reason_exits_2():
     result = runner.invoke(
         app,
-        ['--session', 's', 'network', 'fail',
-         '-p', '/api/', '--reason', 'PIZZA', '--', 'get', 'URL'],
+        [
+            '--session',
+            's',
+            'network',
+            'fail',
+            '-p',
+            '/api/',
+            '--reason',
+            'PIZZA',
+            '--',
+            'get',
+            'URL',
+        ],
     )
     assert result.exit_code == 2
 
@@ -270,9 +325,19 @@ def test_fail_handler_fails_matched():
     with _capture_handler(tab) as cap:
         result = runner.invoke(
             app,
-            ['--session', 's', 'network', 'fail',
-             '-p', '/track/', '--reason', 'CONNECTION_REFUSED',
-             '--', 'get', 'https://app.com'],
+            [
+                '--session',
+                's',
+                'network',
+                'fail',
+                '-p',
+                '/track/',
+                '--reason',
+                'CONNECTION_REFUSED',
+                '--',
+                'get',
+                'https://app.com',
+            ],
         )
     assert result.exit_code == 0, result.stdout
 
@@ -289,8 +354,7 @@ def test_fail_default_reason_is_timed_out():
     with _capture_handler(tab) as cap:
         result = runner.invoke(
             app,
-            ['--session', 's', 'network', 'fail',
-             '-p', '/track/', '--', 'get', 'https://app.com'],
+            ['--session', 's', 'network', 'fail', '-p', '/track/', '--', 'get', 'https://app.com'],
         )
     assert result.exit_code == 0, result.stdout
     asyncio.run(cap.handler(_fetch_event('r1', 'https://app.com/track/x')))

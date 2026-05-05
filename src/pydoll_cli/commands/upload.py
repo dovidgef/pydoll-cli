@@ -18,10 +18,10 @@ def register(app: typer.Typer) -> None:
         help='Set files on an <input type="file">, or open a file chooser via a button click.',
         epilog=(
             'Examples:\n'
-            '  pydoll-cli --session s upload \'input[type=file]\' /path/to/a.png\n'
-            '  pydoll-cli --session s upload \'#avatar\' /a.jpg /b.jpg\n'
+            "  pydoll-cli --session s upload 'input[type=file]' /path/to/a.png\n"
+            "  pydoll-cli --session s upload '#avatar' /a.jpg /b.jpg\n"
             '  # Hidden input behind a styled button: --via-chooser then SELECTOR is the BUTTON\n'
-            '  pydoll-cli --session s upload \'.upload-button\' /a.png --via-chooser\n'
+            "  pydoll-cli --session s upload '.upload-button' /a.png --via-chooser\n"
         ),
     )
     @run_async

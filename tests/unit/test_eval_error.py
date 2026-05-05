@@ -82,8 +82,10 @@ def test_js_error_message_falls_back_to_remote_object():
         {
             'result': {
                 'result': {
-                    'type': 'object', 'subtype': 'error',
-                    'className': 'SyntaxError', 'description': 'SyntaxError: oops',
+                    'type': 'object',
+                    'subtype': 'error',
+                    'className': 'SyntaxError',
+                    'description': 'SyntaxError: oops',
                 },
                 'exceptionDetails': {
                     'text': 'Uncaught',
@@ -95,7 +97,8 @@ def test_js_error_message_falls_back_to_remote_object():
         {
             'result': {
                 'result': {
-                    'type': 'object', 'subtype': 'error',
+                    'type': 'object',
+                    'subtype': 'error',
                     'description': 'TypeError: bad',
                 }
             }
@@ -131,7 +134,9 @@ def test_eval_passes_await_promise_true():
 
     assert result.exit_code == 0, result.stdout
     tab.execute_script.assert_awaited_once_with(
-        'return 1', return_by_value=True, await_promise=True,
+        'return 1',
+        return_by_value=True,
+        await_promise=True,
     )
 
 

@@ -111,9 +111,7 @@ def register(app: typer.Typer) -> None:
         ] = 30.0,
     ) -> None:
         modes_set = sum(
-            1
-            for x in (selector, network_idle, url_contains, page_event, js, stable_ids)
-            if x
+            1 for x in (selector, network_idle, url_contains, page_event, js, stable_ids) if x
         )
         if modes_set != 1:
             raise CliError(
@@ -146,7 +144,10 @@ def register(app: typer.Typer) -> None:
                 else:
                     assert stable_ids is not None
                     matched = await _wait_stable_ids(
-                        tab, stable_ids, stable_ms=stable_ms, timeout=wait,
+                        tab,
+                        stable_ids,
+                        stable_ms=stable_ms,
+                        timeout=wait,
                     )
             except (TimeoutError, asyncio.TimeoutError) as e:
                 # Python 3.10's asyncio.TimeoutError is distinct from TimeoutError;
@@ -190,7 +191,11 @@ async def _wait_selector(tab: Any, selector: str, *, count: int, timeout: float)
 
 
 async def _wait_network_idle(
-    tab: Any, *, idle_ms: int, max_inflight: int, timeout: float,
+    tab: Any,
+    *,
+    idle_ms: int,
+    max_inflight: int,
+    timeout: float,
 ) -> dict[str, Any]:
     inflight: set[str] = set()
     last_change = asyncio.get_running_loop().time()
@@ -283,7 +288,8 @@ async def _wait_page_event(tab: Any, event_alias: str, *, timeout: float) -> dic
     if alias in ('load', 'dom-content'):
         with contextlib.suppress(Exception):
             result = await tab.execute_script(
-                'return document.readyState', return_by_value=True,
+                'return document.readyState',
+                return_by_value=True,
             )
             ready = _scalar_value(result)
             if alias == 'load' and ready == 'complete':
@@ -328,7 +334,11 @@ async def _wait_js(tab: Any, expr: str, *, timeout: float) -> dict[str, Any]:
 
 
 async def _wait_stable_ids(
-    tab: Any, spec: str, *, stable_ms: int, timeout: float,
+    tab: Any,
+    spec: str,
+    *,
+    stable_ms: int,
+    timeout: float,
 ) -> dict[str, Any]:
     if '|' not in spec:
         raise CliError(

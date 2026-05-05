@@ -35,6 +35,7 @@ class _Tab:
     def current_url(self):  # type: ignore[no-untyped-def]
         async def _coro() -> str:
             return ''
+
         return _coro()
 
 
@@ -86,8 +87,13 @@ def test_type_human_passes_humanize_true():
         result = runner.invoke(
             app,
             [
-                '--output', 'json', 'type',
-                'https://example.com', 'input[name=q]', 'pydoll', '--human',
+                '--output',
+                'json',
+                'type',
+                'https://example.com',
+                'input[name=q]',
+                'pydoll',
+                '--human',
             ],
         )
 
@@ -105,8 +111,7 @@ def test_type_default_uses_insert_text():
     with patch('pydoll_cli.commands.type_.open_browser', _stub_browser(tab)):
         result = runner.invoke(
             app,
-            ['--output', 'json', 'type',
-             'https://example.com', 'input[name=q]', 'pydoll'],
+            ['--output', 'json', 'type', 'https://example.com', 'input[name=q]', 'pydoll'],
         )
 
     assert result.exit_code == 0, result.stdout
@@ -124,9 +129,14 @@ def test_type_explicit_delay_ms_uses_constant_interval():
         result = runner.invoke(
             app,
             [
-                '--output', 'json', 'type',
-                'https://example.com', 'input[name=q]', 'pydoll',
-                '--delay-ms', '120',
+                '--output',
+                'json',
+                'type',
+                'https://example.com',
+                'input[name=q]',
+                'pydoll',
+                '--delay-ms',
+                '120',
             ],
         )
 

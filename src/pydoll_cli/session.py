@@ -322,9 +322,7 @@ async def start_attached(
             if tab_url is not None:
                 new_tab = await _find_tab_matching(browser, tab_url)
                 if new_tab is None:
-                    raise CliError(
-                        f'No open tab matched URL containing {tab_url!r}.', 4
-                    )
+                    raise CliError(f'No open tab matched URL containing {tab_url!r}.', 4)
                 created = False
             elif initial_url is not None:
                 new_tab = await _find_tab_matching(browser, initial_url)

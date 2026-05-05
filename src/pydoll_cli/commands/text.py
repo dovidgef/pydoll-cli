@@ -49,7 +49,10 @@ def register(app: typer.Typer) -> None:
                 await tab.go_to(url, timeout=int(opts.timeout))
             if selector and all_matches:
                 elements = await tab.query(
-                    selector, timeout=int(opts.timeout), find_all=True, raise_exc=False,
+                    selector,
+                    timeout=int(opts.timeout),
+                    find_all=True,
+                    raise_exc=False,
                 )
                 if not elements:
                     raise CliError(f'Selector not found: {selector!r}', exit_code=4)

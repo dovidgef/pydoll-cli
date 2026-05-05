@@ -19,6 +19,7 @@ def _stub(tab, browser=None):
     @contextlib.asynccontextmanager
     async def _ctx(_opts):
         yield (browser, tab)
+
     return _ctx
 
 
@@ -109,12 +110,14 @@ def test_batch_creates_one_tab_per_url(tmp_path: Path):
         def title(self):
             async def _coro() -> str:
                 return f'title:{self.url}'
+
             return _coro()
 
         @property
         def page_source(self):
             async def _coro() -> str:
                 return f'<html>{self.url}</html>'
+
             return _coro()
 
     async def fake_new_tab(url='', browser_context_id=None):
@@ -130,9 +133,13 @@ def test_batch_creates_one_tab_per_url(tmp_path: Path):
         result = runner.invoke(
             app,
             [
-                '--output', 'json', 'batch',
-                'https://a.com', 'https://b.com',
-                '--screenshot-dir', str(tmp_path / 'shots'),
+                '--output',
+                'json',
+                'batch',
+                'https://a.com',
+                'https://b.com',
+                '--screenshot-dir',
+                str(tmp_path / 'shots'),
             ],
         )
     assert result.exit_code == 0, result.stdout

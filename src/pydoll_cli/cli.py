@@ -302,8 +302,7 @@ def main(
     page_load_state_lc = page_load_state.lower()
     if page_load_state_lc not in ('complete', 'interactive'):
         raise typer.BadParameter(
-            f'--page-load-state must be "complete" or "interactive" '
-            f'(got {page_load_state!r})',
+            f'--page-load-state must be "complete" or "interactive" (got {page_load_state!r})',
         )
 
     opts = GlobalOptions(

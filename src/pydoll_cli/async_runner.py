@@ -151,7 +151,9 @@ async def wait_for_event(
     tab: Any,
     event_name: str,
     *,
-    predicate: Callable[[dict[str, Any]], bool] | Callable[[dict[str, Any]], Awaitable[bool]] | None = None,
+    predicate: Callable[[dict[str, Any]], bool]
+    | Callable[[dict[str, Any]], Awaitable[bool]]
+    | None = None,
     timeout: float,
 ) -> dict[str, Any]:
     """Subscribe to a CDP event on ``tab``; resolve with the first matching event.

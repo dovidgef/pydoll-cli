@@ -24,7 +24,11 @@ class _Tab:
         self.go_to = AsyncMock()
         self.query = AsyncMock(return_value=MagicMock())
         self.execute_script = AsyncMock(
-            return_value={'result': {'result': {'type': 'object', 'value': {'ok': True, 'count': 5, 'ms': 100}}}},
+            return_value={
+                'result': {
+                    'result': {'type': 'object', 'value': {'ok': True, 'count': 5, 'ms': 100}}
+                }
+            },
         )
         self.enable_page_events = AsyncMock()
         self.disable_page_events = AsyncMock()
@@ -39,6 +43,7 @@ class _Tab:
     def current_url(self):
         async def _coro() -> str:
             return 'https://x.com/dashboard/home'
+
         return _coro()
 
 
@@ -77,7 +82,8 @@ def test_wait_selector_calls_tab_query():
     tab = _Tab()
     with patch('pydoll_cli.commands.wait.open_browser', _stub_browser(tab)):
         result = runner.invoke(
-            app, ['--output', 'json', 'wait', '--selector', '.content', '--wait', '5'],
+            app,
+            ['--output', 'json', 'wait', '--selector', '.content', '--wait', '5'],
         )
     assert result.exit_code == 0, result.stdout
     tab.query.assert_awaited_once_with('.content', timeout=5, raise_exc=False)
@@ -88,7 +94,8 @@ def test_wait_selector_not_found_exits_3():
     tab.query = AsyncMock(return_value=None)
     with patch('pydoll_cli.commands.wait.open_browser', _stub_browser(tab)):
         result = runner.invoke(
-            app, ['--output', 'json', 'wait', '--selector', '.content', '--wait', '1'],
+            app,
+            ['--output', 'json', 'wait', '--selector', '.content', '--wait', '1'],
         )
     assert result.exit_code == 3, (result.exit_code, result.stdout)
 
@@ -98,7 +105,8 @@ def test_wait_url_contains_returns_immediately_when_already_match():
     # The stub _Tab returns 'https://x.com/dashboard/home' which contains '/dashboard'.
     with patch('pydoll_cli.commands.wait.open_browser', _stub_browser(tab)):
         result = runner.invoke(
-            app, ['--output', 'json', 'wait', '--url-contains', '/dashboard'],
+            app,
+            ['--output', 'json', 'wait', '--url-contains', '/dashboard'],
         )
     assert result.exit_code == 0, result.stdout
     tab.enable_page_events.assert_not_called()
@@ -136,7 +144,8 @@ def test_wait_page_event_load_resolves_when_already_complete():
     )
     with patch('pydoll_cli.commands.wait.open_browser', _stub_browser(tab)):
         result = runner.invoke(
-            app, ['--output', 'json', 'wait', '--page-event', 'load', '--wait', '0.5'],
+            app,
+            ['--output', 'json', 'wait', '--page-event', 'load', '--wait', '0.5'],
         )
     assert result.exit_code == 0, result.stdout
     assert '"already": "complete"' in result.stdout
@@ -165,7 +174,8 @@ def test_wait_page_event_load_subscribes_when_loading():
     )
     with patch('pydoll_cli.commands.wait.open_browser', _stub_browser(tab)):
         result = runner.invoke(
-            app, ['--output', 'json', 'wait', '--page-event', 'load', '--wait', '0.3'],
+            app,
+            ['--output', 'json', 'wait', '--page-event', 'load', '--wait', '0.3'],
         )
     # Mock can't fire CDP events — falls through to listener and times out.
     assert result.exit_code == 3, (result.exit_code, result.stdout)
@@ -178,8 +188,14 @@ def test_wait_network_idle_subscribes_to_three_events():
         result = runner.invoke(
             app,
             [
-                '--output', 'json', 'wait', '--network-idle',
-                '--idle-ms', '50', '--wait', '1',
+                '--output',
+                'json',
+                'wait',
+                '--network-idle',
+                '--idle-ms',
+                '50',
+                '--wait',
+                '1',
             ],
         )
     # Either ready (no requests => instant idle) or timeout — both keep the

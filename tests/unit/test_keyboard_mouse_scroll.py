@@ -18,6 +18,7 @@ def _stub(tab):
     @contextlib.asynccontextmanager
     async def _ctx(_opts):
         yield (MagicMock(), tab)
+
     return _ctx
 
 
@@ -30,8 +31,17 @@ def test_keyboard_press_resolves_key_and_modifiers():
     with patch('pydoll_cli.commands.keyboard.open_browser', _stub(tab)):
         result = runner.invoke(
             app,
-            ['--output', 'json', 'keyboard', 'press', 'A',
-             '--modifiers', 'CONTROL,SHIFT', '--interval-ms', '50'],
+            [
+                '--output',
+                'json',
+                'keyboard',
+                'press',
+                'A',
+                '--modifiers',
+                'CONTROL,SHIFT',
+                '--interval-ms',
+                '50',
+            ],
         )
     assert result.exit_code == 0, result.stdout
     args, kwargs = tab.keyboard.press.call_args
@@ -63,7 +73,8 @@ def test_keyboard_hotkey_too_many_exits_2():
     tab.keyboard = MagicMock(hotkey=AsyncMock())
     with patch('pydoll_cli.commands.keyboard.open_browser', _stub(tab)):
         result = runner.invoke(
-            app, ['keyboard', 'hotkey', 'CONTROL', 'SHIFT', 'ALT', 'A'],
+            app,
+            ['keyboard', 'hotkey', 'CONTROL', 'SHIFT', 'ALT', 'A'],
         )
     assert result.exit_code == 2
 
@@ -98,12 +109,25 @@ def test_mouse_click_double_uses_double_click():
     with patch('pydoll_cli.commands.mouse.open_browser', _stub(tab)):
         result = runner.invoke(
             app,
-            ['--output', 'json', 'mouse', 'click', '50', '50',
-             '--double', '--button', 'right', '--humanize'],
+            [
+                '--output',
+                'json',
+                'mouse',
+                'click',
+                '50',
+                '50',
+                '--double',
+                '--button',
+                'right',
+                '--humanize',
+            ],
         )
     assert result.exit_code == 0, result.stdout
     tab.mouse.double_click.assert_awaited_once_with(
-        50.0, 50.0, button=MouseButton.RIGHT, humanize=True,
+        50.0,
+        50.0,
+        button=MouseButton.RIGHT,
+        humanize=True,
     )
 
 
@@ -152,7 +176,8 @@ def test_scroll_by_y_negative_goes_up():
     tab.scroll = MagicMock(by=AsyncMock())
     with patch('pydoll_cli.commands.scroll.open_browser', _stub(tab)):
         result = runner.invoke(
-            app, ['--output', 'json', 'scroll', '--by-y', '-300', '--humanize'],
+            app,
+            ['--output', 'json', 'scroll', '--by-y', '-300', '--humanize'],
         )
     assert result.exit_code == 0, result.stdout
     tab.scroll.by.assert_awaited_once_with(ScrollPosition.UP, 300, humanize=True)
@@ -176,7 +201,8 @@ def test_scroll_to_selector_calls_scroll_into_view():
     tab.query = AsyncMock(return_value=element)
     with patch('pydoll_cli.commands.scroll.open_browser', _stub(tab)):
         result = runner.invoke(
-            app, ['--output', 'json', 'scroll', '--to-selector', '.footer'],
+            app,
+            ['--output', 'json', 'scroll', '--to-selector', '.footer'],
         )
     assert result.exit_code == 0, result.stdout
     element.scroll_into_view.assert_awaited_once()

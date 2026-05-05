@@ -114,7 +114,9 @@ def register(app: typer.Typer) -> None:
             # await_promise=True so `eval` resolves Promises returned from JS
             # (verified to exist in pydoll-python >=2.22).
             result = await tab.execute_script(
-                src, return_by_value=by_value, await_promise=True,
+                src,
+                return_by_value=by_value,
+                await_promise=True,
             )
         ro, ex = _extract_eval_result(result)
         if ex is not None or ro.get('subtype') == 'error':

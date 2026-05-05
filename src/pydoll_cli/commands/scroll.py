@@ -68,9 +68,7 @@ def register(app: typer.Typer) -> None:
             typer.Option('--humanize', help='Smooth/momentum scrolling for relative + endpoints.'),
         ] = False,
     ) -> None:
-        modes = sum(
-            1 for x in (by_y is not None, to_y is not None, to_bottom, to_selector) if x
-        )
+        modes = sum(1 for x in (by_y is not None, to_y is not None, to_bottom, to_selector) if x)
         if modes != 1:
             raise CliError(
                 'scroll: pass exactly one of --by-y, --to-y, --to-bottom, --to-selector',
@@ -95,7 +93,10 @@ def register(app: typer.Typer) -> None:
                 payload = {'scrolled': {'to_y': to_y}}
             elif to_bottom:
                 payload = await _scroll_to_bottom(
-                    tab, max_loops=max_loops, idle_ms=idle_ms, humanize=humanize,
+                    tab,
+                    max_loops=max_loops,
+                    idle_ms=idle_ms,
+                    humanize=humanize,
                 )
             else:
                 assert to_selector is not None
@@ -108,7 +109,11 @@ def register(app: typer.Typer) -> None:
 
 
 async def _scroll_to_bottom(
-    tab: Any, *, max_loops: int, idle_ms: int, humanize: bool,
+    tab: Any,
+    *,
+    max_loops: int,
+    idle_ms: int,
+    humanize: bool,
 ) -> dict[str, Any]:
     last_height = -1
     loops = 0
@@ -116,7 +121,9 @@ async def _scroll_to_bottom(
         await tab.scroll.to_bottom(humanize=humanize)
         await asyncio.sleep(idle_ms / 1000.0)
         result = await tab.execute_script(
-            'document.body.scrollHeight', return_by_value=True, await_promise=False,
+            'document.body.scrollHeight',
+            return_by_value=True,
+            await_promise=False,
         )
         height = _scalar_value(result)
         loops += 1

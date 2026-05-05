@@ -327,8 +327,8 @@ async def block(
             '--type',
             '-t',
             help='Resource type to block; repeat to block multiple. '
-                 'Names: Document, Stylesheet, Image, Media, Font, Script, XHR, Fetch, '
-                 'Prefetch, EventSource, WebSocket, Manifest, Ping, Other (case-insensitive).',
+            'Names: Document, Stylesheet, Image, Media, Font, Script, XHR, Fetch, '
+            'Prefetch, EventSource, WebSocket, Manifest, Ping, Other (case-insensitive).',
         ),
     ] = None,
 ) -> None:
@@ -355,6 +355,7 @@ async def block(
             else:
                 with contextlib.suppress(Exception):
                     await tab.continue_request(rid)
+
         return handler
 
     rc = await _run_with_interceptor(opts, inner_args, _factory)
@@ -423,6 +424,7 @@ async def mock(
             else:
                 with contextlib.suppress(Exception):
                     await tab.continue_request(rid)
+
         return handler
 
     rc = await _run_with_interceptor(opts, inner_args, _factory)
@@ -484,6 +486,7 @@ async def inject_header(
             else:
                 with contextlib.suppress(Exception):
                     await tab.continue_request(rid)
+
         return handler
 
     rc = await _run_with_interceptor(opts, inner_args, _factory)
@@ -536,6 +539,7 @@ async def fail(
             else:
                 with contextlib.suppress(Exception):
                     await tab.continue_request(rid)
+
         return handler
 
     rc = await _run_with_interceptor(opts, inner_args, _factory)

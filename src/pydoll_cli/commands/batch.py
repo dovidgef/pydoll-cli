@@ -82,6 +82,7 @@ def register(app: typer.Typer) -> None:
         sem = asyncio.Semaphore(max_concurrent)
 
         async with open_browser(opts) as (browser, _default_tab):
+
             async def _one(idx: int, url: str) -> dict[str, Any]:
                 async with sem:
                     record: dict[str, Any] = {'url': url}
