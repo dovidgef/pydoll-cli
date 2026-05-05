@@ -41,7 +41,25 @@ async def start(
     name: Annotated[str, typer.Argument(help='Session name (alphanumeric/dash).')],
     url: Annotated[
         str | None,
-        typer.Option('--url', help='Navigate to this URL on startup.'),
+        typer.Option(
+            '--url',
+            help=(
+                'Navigate to this URL on startup. With --share-profile, if a '
+                'tab matching this URL is already open, it is adopted as-is '
+                '(no re-navigation) instead of duplicating it.'
+            ),
+        ),
+    ] = None,
+    tab_url: Annotated[
+        str | None,
+        typer.Option(
+            '--tab-url',
+            help=(
+                'Adopt-only: pin an already-open tab whose URL contains this '
+                'substring. Errors if no match. Requires --share-profile. '
+                'session stop leaves the adopted tab open by default.'
+            ),
+        ),
     ] = None,
     startup_timeout: Annotated[
         float,
@@ -81,6 +99,22 @@ async def start(
     # Default policy: Wavebox can't cleanly fresh-launch, so attach by default.
     use_attach = attach or opts.browser == 'wavebox'
 
+    if tab_url is not None:
+        if not share_profile:
+            raise CliError(
+                '--tab-url requires --share-profile (incognito tabs are not part '
+                "of the user's visible profile to adopt).",
+                exit_code=2,
+            )
+        if url is not None:
+            raise CliError(
+                '--tab-url and --url are mutually exclusive. Use --url for '
+                'create-or-reuse, --tab-url for adopt-only.',
+                exit_code=2,
+            )
+        if not use_attach:
+            raise CliError('--tab-url requires --attach.', exit_code=2)
+
     try:
         if use_attach:
             ws = await session_mod.probe_running_browser([attach_port])
@@ -96,6 +130,7 @@ async def start(
                 ws,
                 opts,
                 initial_url=url,
+                tab_url=tab_url,
                 use_incognito=not share_profile,
             )
         else:
@@ -125,11 +160,22 @@ def stop(
     timeout: Annotated[
         float, typer.Option('--timeout', help='Seconds to wait for graceful exit.')
     ] = 10.0,
+    close_tab: Annotated[
+        bool,
+        typer.Option(
+            '--close-tab',
+            help=(
+                'Shared-profile mode only: also close the pinned tab. Default '
+                "is to leave it open (since adopted user tabs shouldn't be "
+                'taken down).'
+            ),
+        ),
+    ] = False,
 ) -> None:
     opts: GlobalOptions = ctx.obj
     printer = Printer(opts)
     try:
-        session_mod.stop(name, timeout=timeout)
+        session_mod.stop(name, timeout=timeout, close_tab=close_tab)
     except FileNotFoundError as e:
         raise CliError(str(e), exit_code=6) from e
     printer.emit({'stopped': name}, text=f'stopped session {name!r}')

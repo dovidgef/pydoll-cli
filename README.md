@@ -44,11 +44,16 @@ pydoll-cli session start my-work --attach --url https://example.com
 pydoll-cli --session my-work query "h1" --attr textContent
 pydoll-cli session stop my-work    # deletes just the incognito context
 
-# Attach but share your real logged-in profile (cookies/logins flow through)
-# — session stop only closes the pinned tab; the browser keeps running
+# Attach but share your real logged-in profile (cookies/logins flow through).
+# If --url is already open in another tab, that tab is adopted as-is.
+# session stop leaves the pinned tab open by default (--close-tab to close it).
 pydoll-cli session start linkedin --attach --share-profile \
   --url https://www.linkedin.com/feed/
 pydoll-cli --session linkedin query "h1"
+
+# Or: ride along on a tab the user already has open (adopt-only, never spawns).
+pydoll-cli --browser wavebox session start work --share-profile \
+  --tab-url 'github.com/anthropics'
 
 # Use Wavebox instead of Chrome
 pydoll-cli --browser wavebox screenshot https://example.com -o shot.png
@@ -141,8 +146,9 @@ Session-start-only flags (on `session start`):
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `--attach/--no-attach`    | Attach to a running browser on `--attach-port` (default 9222) instead of launching one. On by default for `--browser wavebox`.        |
 | `--attach-port PORT`      | CDP port of the running browser to attach to (default 9222).                                                                          |
-| `--share-profile`         | With `--attach`: pin a tab in the running browser's default (logged-in) context instead of a fresh incognito context. `session stop` then just closes the tab. |
-| `--url URL`               | Navigate the pinned tab to this URL on startup.                                                                                       |
+| `--share-profile`         | With `--attach`: pin a tab in the running browser's default (logged-in) context instead of a fresh incognito context. `session stop` then leaves the pinned tab open by default (use `--close-tab` to close it). |
+| `--url URL`               | Navigate the pinned tab to this URL on startup. With `--share-profile`: if a tab matching this URL is already open, it's adopted as-is (no duplicate, no re-navigation). |
+| `--tab-url SUBSTR`        | With `--share-profile` only: **adopt-only.** Pin an already-open tab whose URL contains `SUBSTR`. Errors with exit 4 if no match. Mutually exclusive with `--url`. |
 | `--startup-timeout SEC`   | Seconds to wait for CDP readiness on a fresh launch (default 30).                                                                     |
 | `--timeout SECONDS`            | Per-command timeout (default 30).                                         |
 | `--output {text,json}`         | `json` for stable machine-readable output.                                |

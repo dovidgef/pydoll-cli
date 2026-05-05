@@ -18,6 +18,7 @@ import subprocess
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -26,6 +27,7 @@ from pydoll.browser import Chrome
 
 from pydoll_cli import browsers
 from pydoll_cli.context import GlobalOptions
+from pydoll_cli.output import CliError
 
 _IS_WINDOWS = platform.system() == 'Windows'
 
@@ -77,6 +79,10 @@ class SessionState:
     attached: bool = False
     browser_context_id: str | None = None
     target_id: str | None = None
+    # True when we created the pinned tab; False when we adopted an existing
+    # one. Controls whether `session stop --close-tab` is needed to take it
+    # down — adopted user tabs are left alone by default.
+    created_target: bool = True
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)
@@ -228,26 +234,29 @@ def stop_quiet(name: str) -> None:
         state_path(name).unlink()
 
 
-def stop(name: str, *, timeout: float = 10.0) -> None:
+def stop(name: str, *, timeout: float = 10.0, close_tab: bool = False) -> None:
     """Orderly stop.
 
     For owned sessions: SIGTERM, wait, SIGKILL on timeout, remove state file.
-    For attached sessions: delete the incognito browser context (the remote
-    browser keeps running), then remove the state file.
+    For attached sessions: delete the incognito browser context (incognito
+    mode), or — when ``close_tab`` is True — close the pinned tab
+    (shared-profile mode). The remote browser keeps running. Then remove the
+    state file.
     """
     state = load(name)
     if state.attached:
-        asyncio.run(_stop_attached(state))
+        asyncio.run(_stop_attached(state, close_tab=close_tab))
     else:
         _kill(state.pid, timeout=timeout)
     state_path(name).unlink(missing_ok=True)
 
 
-async def _stop_attached(state: SessionState) -> None:
+async def _stop_attached(state: SessionState, *, close_tab: bool = False) -> None:
     """Clean up what we created on the remote browser.
 
     Incognito mode: delete the browser context (which closes its tabs).
-    Shared-profile mode: close only the tab we pinned.
+    Shared-profile mode: only close the pinned tab when ``close_tab`` is True
+    (since the user may have adopted an existing tab they want to keep open).
     """
     browser = Chrome()
     try:
@@ -255,7 +264,7 @@ async def _stop_attached(state: SessionState) -> None:
         if state.browser_context_id:
             with contextlib.suppress(Exception):
                 await browser.delete_browser_context(state.browser_context_id)
-        elif state.target_id:
+        elif close_tab and state.target_id:
             with contextlib.suppress(Exception):
                 for t in await browser.get_opened_tabs():
                     if t._target_id == state.target_id:
@@ -274,6 +283,7 @@ async def start_attached(
     opts: GlobalOptions,
     *,
     initial_url: str | None = None,
+    tab_url: str | None = None,
     use_incognito: bool = True,
 ) -> SessionState:
     """Attach to a running browser and persist a pinned tab for later reuse.
@@ -282,9 +292,14 @@ async def start_attached(
     created and the tab lives there — no cookies shared with the user's profile,
     and ``session stop`` disposes the whole context.
 
-    When ``use_incognito=False``: a new tab is opened in the running browser's
-    default context, inheriting the user's cookies and logins. ``session stop``
-    closes only that tab.
+    When ``use_incognito=False``: shared-profile mode.
+
+    - ``tab_url`` (adopt-only): pin the first open tab whose URL contains the
+      substring. Errors if no match. Tab is *adopted* — ``session stop``
+      leaves it open by default.
+    - ``initial_url`` (smart reuse): pin an existing tab whose URL contains
+      it; otherwise create a new tab and navigate to it.
+    - neither: open a fresh blank tab.
     """
     if state_path(name).exists():
         existing = load(name)
@@ -294,15 +309,32 @@ async def start_attached(
 
     browser = Chrome()
     context_id: str | None = None
+    created = True
     try:
         await browser.connect(ws_url)
         if use_incognito:
             context_id = await browser.create_browser_context()
             new_tab = await browser.new_tab(browser_context_id=context_id)
+            if initial_url:
+                await new_tab.go_to(initial_url)
         else:
-            new_tab = await browser.new_tab()
-        if initial_url:
-            await new_tab.go_to(initial_url)
+            new_tab = None
+            if tab_url is not None:
+                new_tab = await _find_tab_matching(browser, tab_url)
+                if new_tab is None:
+                    raise CliError(
+                        f'No open tab matched URL containing {tab_url!r}.', 4
+                    )
+                created = False
+            elif initial_url is not None:
+                new_tab = await _find_tab_matching(browser, initial_url)
+                if new_tab is not None:
+                    created = False
+            if new_tab is None:
+                new_tab = await browser.new_tab()
+                if initial_url:
+                    await new_tab.go_to(initial_url)
+        assert new_tab is not None  # narrow for mypy across both branches
         target_id = new_tab._target_id
     finally:
         await browser.close()
@@ -322,10 +354,26 @@ async def start_attached(
         attached=True,
         browser_context_id=context_id,
         target_id=target_id,
+        created_target=created,
     )
     state_path(name).parent.mkdir(parents=True, exist_ok=True)
     state_path(name).write_text(state.to_json())
     return state
+
+
+async def _find_tab_matching(browser: Chrome, substring: str) -> Any | None:
+    """First open tab whose URL contains ``substring``, else None.
+
+    Tabs whose ``current_url`` raises (detached, broken connection) are skipped.
+    """
+    for t in await browser.get_opened_tabs():
+        try:
+            url = await t.current_url
+        except Exception:
+            continue
+        if substring in url:
+            return t
+    return None
 
 
 def _port_from_ws(ws_url: str) -> int:

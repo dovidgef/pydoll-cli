@@ -102,23 +102,24 @@ def _resolve_ws_url(opts: GlobalOptions) -> str | None:
 
 @asynccontextmanager
 async def _open_attached(opts: GlobalOptions, state: Any) -> AsyncIterator[tuple[Any, Any]]:
-    """Reuse a persisted attached session: connect, find our incognito tab.
+    """Reuse a persisted attached session: connect, find our pinned tab.
 
-    If the tab was closed externally, create a new one in the same context and
-    update the state file with its new target_id.
+    If the persisted tab is gone and the caller is going to pick a tab via
+    ``--tab-url``/``--tab``, skip the blank-tab fallback — otherwise we'd
+    leak a placeholder ``about:blank`` into the user's browser on every call.
+    Re-pin ``state.target_id`` to whatever the caller actually selects so
+    subsequent calls find it directly.
     """
     browser = Chrome()
     try:
         await browser.connect(state.ws_url)
-        tab = None
         tabs = await browser.get_opened_tabs()
-        for t in tabs:
-            if t._target_id == state.target_id:
-                tab = t
-                break
-        if tab is None:
-            # Tab was closed; spawn a fresh one in the same context (incognito
-            # or default, depending on how the session was started).
+        tab = next((t for t in tabs if t._target_id == state.target_id), None)
+        caller_will_switch = opts.tab_url is not None or opts.tab is not None
+
+        if tab is None and not caller_will_switch:
+            # Persisted tab is gone and the caller didn't specify where to
+            # go — fall back to a fresh tab in the same context.
             if state.browser_context_id:
                 tab = await browser.new_tab(
                     browser_context_id=state.browser_context_id,
@@ -126,10 +127,21 @@ async def _open_attached(opts: GlobalOptions, state: Any) -> AsyncIterator[tuple
             else:
                 tab = await browser.new_tab()
             state.target_id = tab._target_id
+            state.created_target = True
             session_mod.state_path(state.name).write_text(state.to_json())
-        # Apply --tab-url/--tab overrides if the caller wants a different tab
-        # within the same attached browser (unlikely but supported).
-        tab = await _maybe_switch_tab(browser, tab, opts)
+
+        # Hand whatever we have (possibly None) to the switcher; if --tab-url
+        # is set it will resolve to the requested tab.
+        default = tab if tab is not None else (tabs[0] if tabs else None)
+        tab = await _maybe_switch_tab(browser, default, opts)
+
+        # Re-pin to whatever the caller actually selected so the blank-tab
+        # path doesn't trigger again on the next call. Mark adopted.
+        if tab is not None and getattr(tab, '_target_id', None) != state.target_id:
+            state.target_id = tab._target_id
+            state.created_target = False
+            session_mod.state_path(state.name).write_text(state.to_json())
+
         yield browser, tab
     finally:
         await browser.close()

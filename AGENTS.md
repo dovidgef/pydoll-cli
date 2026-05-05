@@ -270,24 +270,43 @@ pydoll-cli session stop research     # disposes the whole incognito context
 
 **Shared profile** — pin a tab inside the user's real logged-in context. Use
 this when you need access to authenticated pages (Gmail, LinkedIn, internal
-dashboards) without bothering the user for creds:
+dashboards) without bothering the user for creds. Three start modes:
+
+| Flags                       | Behavior                                                                    |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `--share-profile --url X`   | Adopt an existing tab containing X; otherwise create a new tab and navigate. Adopted tabs preserve scroll/state (no re-navigation). |
+| `--share-profile --tab-url SUBSTR` | **Adopt-only.** Pin an existing tab matching SUBSTR. Errors with exit 4 if no match. Never creates a tab. |
+| `--share-profile` (no URL)  | Create a fresh blank tab.                                                   |
 
 ```bash
+# Adopt an existing tab (recommended when the page is already open)
+pydoll-cli session start linkedin --attach --share-profile \
+  --tab-url 'linkedin.com/feed'
+pydoll-cli --session linkedin query 'a[href*="/in/"]' --all --attr href
+pydoll-cli session stop linkedin     # leaves the user's tab open
+
+# Or: open if missing, reuse if already there
 pydoll-cli session start linkedin --attach --share-profile \
   --url https://www.linkedin.com/feed/
-pydoll-cli --session linkedin query 'a[href*="/in/"]' --all --attr href
-pydoll-cli session stop linkedin     # closes only the pinned tab
 ```
 
-In both modes, the tab (and incognito context, if any) are persisted under
-`~/.cache/pydoll-cli/sessions/<NAME>.json`; every `--session <NAME>` call
-reuses that exact tab until you `session stop`. The user's other tabs are
-never touched, and `session stop` **never kills the user's browser process**
-— it only disposes what we created.
+State files (`~/.cache/pydoll-cli/sessions/<NAME>.json`) include a
+`created_target` boolean — `true` when we created the pinned tab, `false`
+when we adopted an existing one. Visible in `session info` output.
+
+`session stop` (shared-profile mode) **leaves the pinned tab open by
+default** — pass `--close-tab` if you want to also close it. The browser
+process is never killed.
+
+In both modes, the tab (and incognito context, if any) are persisted; every
+`--session <NAME>` call reuses that exact tab until you `session stop`. The
+user's other tabs are never touched.
 
 **Rule of thumb for agents:** default to `--share-profile` only when you
 actually need the user's logins. For clean research / scraping, the default
-incognito mode keeps the user's session hermetic.
+incognito mode keeps the user's session hermetic. When you do need shared
+profile and the page is already open, prefer `--tab-url SUBSTR` over `--url`
+— it's the safest "ride along" pattern.
 
 ### Wavebox specifics
 
@@ -296,6 +315,13 @@ readiness until the user logs in to Wavebox itself). So `session start --browser
 wavebox` **defaults to `--attach`**: we probe port 9222 for a running Wavebox,
 attach to it, and create the incognito context there. If no running Wavebox is
 found, the command errors with a clear message explaining what to start.
+
+Recommended Wavebox pattern when the user already has the target site open:
+
+```bash
+pydoll-cli --browser wavebox --output json session start work \
+  --share-profile --tab-url 'github.com/anthropics'
+```
 
 Pass `--no-attach` if you want to insist on a fresh launch anyway (e.g. you
 have a pre-seeded Wavebox profile past onboarding at `--user-data-dir`).

@@ -4,6 +4,43 @@ All notable changes to pydoll-cli are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] — 2026-05-05
+
+Attached-session leak fixes + first-class "ride along on an existing tab" flow.
+
+### Fixed
+
+- **Attached + `--share-profile`: `session start --url X` no longer duplicates
+  a tab.** When `X` matches an already-open tab in the running browser, that
+  tab is adopted as-is (no re-navigation, no new tab). Previously a duplicate
+  tab was always created.
+- **Attached + `--share-profile`: blank-tab leak across `--session` calls.**
+  When the pinned tab had been closed manually, every subsequent
+  `pydoll-cli --session N --tab-url X …` invocation would spawn an
+  `about:blank` tab in the user's browser before switching to the requested
+  one. Now we skip the blank-tab fallback whenever the caller will resolve
+  the tab via `--tab-url` / `--tab`, and re-pin `state.target_id` to the
+  resolved tab so future calls hit it directly.
+
+### Added
+
+- **`session start --tab-url SUBSTR`** (with `--share-profile`). Adopt-only:
+  pin an already-open tab whose URL contains the substring. Errors with
+  exit 4 if no match — never spawns a tab. Use this when the user already
+  has the target site open and you want the agent to ride along.
+- **`session stop --close-tab`** (shared-profile mode). Also closes the
+  pinned tab on stop. Pre-0.3.2 default.
+- **`SessionState.created_target`** (`session info` output). `true` when the
+  session created the pinned tab, `false` when it adopted an existing user
+  tab.
+
+### Changed
+
+- **`session stop` (shared-profile mode) no longer closes the pinned tab by
+  default.** Pass `--close-tab` for the previous behavior. Rationale: with
+  the new adoption flows (smart `--url` reuse, explicit `--tab-url`), a stop
+  could otherwise close a tab the user opened themselves.
+
 ## [0.3.1] — 2026-05-03
 
 Bug-fix + small-ergonomic release surfaced by an end-to-end demo run of 0.3.0.
