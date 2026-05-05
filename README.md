@@ -216,11 +216,15 @@ The skill complements `AGENTS.md`: the skill is the compact in-context primer (a
 
 ```bash
 git clone https://github.com/dovidgefen/pydoll-cli && cd pydoll-cli
-uv sync
+uv sync --group dev
+uv run pre-commit install   # runs ruff format, ruff check, mypy, pytest on each commit
 uv run pydoll-cli --help
 uv run pytest
-uv run ruff check .
+uv run ruff check . && uv run ruff format --check .
 ```
+
+Pre-commit mirrors the GitHub Actions CI checks (`.pre-commit-config.yaml`),
+so a passing local commit means a passing CI run.
 
 ## License
 

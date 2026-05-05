@@ -1,0 +1,42 @@
+# Run the same checks CI runs, locally, before each commit.
+#
+# One-time setup (per clone):
+#     uv sync --group dev
+#     uv run pre-commit install
+#
+# Hooks all use `language: system` so they share the project's uv-managed venv
+# (no isolated pre-commit envs to drift) and call the same `uv run` commands
+# the CI workflow does.
+
+default_install_hook_types: [pre-commit]
+
+repos:
+  - repo: local
+    hooks:
+      # Mirror of CI `ruff format --check`. Auto-formats locally; pre-commit
+      # then fails the commit if anything changed so you re-stage and retry.
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check
+        language: system
+        types_or: [python, pyi]
+
+      - id: mypy
+        name: mypy
+        entry: uv run mypy src/pydoll_cli
+        language: system
+        pass_filenames: false
+        files: ^src/.*\.py$
+
+      - id: pytest-unit
+        name: pytest tests/unit
+        entry: uv run pytest tests/unit -q
+        language: system
+        pass_filenames: false
+        files: ^(src|tests)/.*\.py$
