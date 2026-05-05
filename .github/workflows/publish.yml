@@ -14,7 +14,7 @@ jobs:
       id-token: write  # PyPI Trusted Publisher (OIDC)
     steps:
       - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
       - name: Build
