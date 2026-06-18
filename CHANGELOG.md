@@ -6,8 +6,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-06-18
+
 Disk hygiene for session profiles — stop the unbounded growth of leftover
-Chromium profiles under `~/.cache/pydoll-cli/sessions/`.
+Chromium profiles under `~/.cache/pydoll-cli/sessions/` — plus an upgrade to
+pydoll 2.23.0.
 
 ### Added
 
@@ -28,6 +31,11 @@ Chromium profiles under `~/.cache/pydoll-cli/sessions/`.
   `session start NAME` that reuses it (e.g. to preserve a login). Attached /
   shared-profile sessions own no profile dir, so their stop behavior is
   unchanged. The internal stale-session restart path never purges.
+- **Upgraded the underlying `pydoll` to 2.23.0.** Brings worker User-Agent
+  override propagation (stealthier `--user-agent` spoofing in Web/Service Worker
+  scopes), hardened CDP connection/event handling that benefits long-running
+  `network` and `wait` commands, and a `WebElement` attribute bug fix. No
+  `pydoll-cli` behavior or API changes — 2.23.0 is fully API-compatible.
 
 ## [0.3.2] — 2026-05-05
 
