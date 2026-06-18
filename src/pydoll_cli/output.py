@@ -38,6 +38,19 @@ class CliError(Exception):
         self.exit_code = exit_code
 
 
+# ---- Formatting ---------------------------------------------------------
+
+
+def human_bytes(n: int) -> str:
+    """Format a byte count for human-readable text output (1024-based)."""
+    size = float(n)
+    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+        if size < 1024 or unit == 'TB':
+            return f'{int(size)} B' if unit == 'B' else f'{size:.1f} {unit}'
+        size /= 1024
+    return f'{size:.1f} TB'  # unreachable; satisfies type checkers
+
+
 # ---- Logging ------------------------------------------------------------
 
 

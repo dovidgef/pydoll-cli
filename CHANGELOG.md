@@ -4,6 +4,31 @@ All notable changes to pydoll-cli are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Disk hygiene for session profiles — stop the unbounded growth of leftover
+Chromium profiles under `~/.cache/pydoll-cli/sessions/`.
+
+### Added
+
+- **`session prune`** — reclaim disk by deleting reclaimable profiles. Requires
+  a selector: `--orphans` (profile dirs with no state file), `--dead`
+  (registered sessions whose browser isn't alive), and/or `--older-than DAYS`.
+  Supports `--dry-run` and `--yes`; never touches alive sessions; reports bytes
+  reclaimed.
+- **`session rm NAME…`** — stop a session if running, then delete its whole
+  profile dir + state file.
+- **`session list`** — now also surfaces leftover profile dirs as `orphan` rows
+  (with size) so they're visible.
+
+### Changed
+
+- **`session stop` now deletes the session's on-disk profile by default**
+  (owned sessions). Pass `--no-purge` to keep the profile for a later
+  `session start NAME` that reuses it (e.g. to preserve a login). Attached /
+  shared-profile sessions own no profile dir, so their stop behavior is
+  unchanged. The internal stale-session restart path never purges.
+
 ## [0.3.2] — 2026-05-05
 
 Attached-session leak fixes + first-class "ride along on an existing tab" flow.

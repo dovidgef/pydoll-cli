@@ -36,7 +36,11 @@ pydoll-cli --output json get https://example.com
 pydoll-cli --no-headless session start agent-run
 pydoll-cli --session agent-run get https://news.ycombinator.com
 pydoll-cli --output json --session agent-run query "a.storylink" --all --attr href
-pydoll-cli session stop agent-run
+pydoll-cli session stop agent-run            # kills the browser AND deletes its profile (--no-purge to keep)
+
+# Reclaim disk from leftover/old session profiles (they show as "orphan" in list).
+pydoll-cli session prune --orphans --dry-run # preview; add --yes to delete. Also --dead, --older-than N
+pydoll-cli session rm agent-run              # stop if running + delete one session outright
 
 # Attach to a running Chrome/Wavebox and operate in an isolated incognito tab
 # that persists across commands (default for --browser wavebox; opt-in elsewhere)
@@ -109,7 +113,7 @@ pydoll-cli exposes the full pydoll feature set as subcommands. See `pydoll-cli <
 | Interception        | `network block`, `network mock`, `network inject-header`, `network fail` (Fetch wrap pattern) |
 | Cookies & state     | `cookies get`, `cookies set`, `cookies clear`                            |
 | Stealth / evasion   | `cloudflare bypass`, `cloudflare auto-solve`, humanized typing/clicking, `--webrtc-leak-protection` |
-| Sessions            | `session start`, `session stop`, `session list`, `session info`, `session attach` |
+| Sessions            | `session start`, `session stop`, `session list`, `session info`, `session attach`, `session prune`, `session rm` |
 | Scripting           | `shell`, `run SCRIPT.py`                                                 |
 | Introspection       | `info`, `browsers`                                                       |
 

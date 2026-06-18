@@ -12,6 +12,7 @@ import contextlib
 import json
 import os
 import platform
+import shutil
 import signal
 import socket
 import subprocess
@@ -272,6 +273,142 @@ async def _stop_attached(state: SessionState, *, close_tab: bool = False) -> Non
                         break
     finally:
         await browser.close()
+
+
+# ---- Garbage collection -------------------------------------------------
+
+
+def profile_dirs() -> list[Path]:
+    """All on-disk session profile directories (``sessions/<name>/``)."""
+    d = sessions_dir()
+    if not d.exists():
+        return []
+    return sorted(p for p in d.iterdir() if p.is_dir())
+
+
+def orphan_dirs() -> list[Path]:
+    """Profile dirs with no matching ``<name>.json`` state file.
+
+    These are leftover Chromium profiles from sessions whose state file was
+    removed (e.g. an old ``stop`` before purge-on-stop existed, or a crash).
+    They are invisible to ``list_states`` and reclaimable.
+    """
+    return [p for p in profile_dirs() if not state_path(p.name).exists()]
+
+
+def _dir_size(path: Path) -> int:
+    """Total size in bytes of all files under ``path`` (best-effort)."""
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total += (Path(root) / name).stat(follow_symlinks=False).st_size
+            except OSError:
+                continue
+    return total
+
+
+def purge_profile(name: str) -> int:
+    """Delete a session's profile dir (``sessions/<name>/``). Returns bytes freed.
+
+    No-op if the dir does not exist (e.g. attached sessions own no profile).
+    """
+    pdir = sessions_dir() / name
+    if not pdir.exists():
+        return 0
+    freed = _dir_size(pdir)
+    shutil.rmtree(pdir, ignore_errors=True)
+    return freed
+
+
+@dataclass
+class PruneCandidate:
+    name: str
+    path: Path  # the profile dir
+    size: int  # bytes
+    reason: str  # 'orphan' | 'dead' | 'old'
+
+
+def _profile_age_seconds(name: str, path: Path, state: SessionState | None) -> float:
+    """Seconds since the session was last started (registered) or the profile
+    dir was last modified (orphan)."""
+    if state is not None:
+        return max(0.0, time.time() - state.started_at)
+    try:
+        return max(0.0, time.time() - path.stat().st_mtime)
+    except OSError:
+        return 0.0
+
+
+async def collect_prune_candidates(
+    *,
+    orphans: bool = False,
+    dead: bool = False,
+    older_than_days: float | None = None,
+) -> list[PruneCandidate]:
+    """Select reclaimable profiles per the given flags.
+
+    - ``orphans``: profile dirs with no state file.
+    - ``dead``: registered sessions whose browser is not ``alive()``.
+    - ``older_than_days`` alone (no selector): all non-alive profiles older than
+      the threshold. When combined with a selector, it *filters* that selection.
+
+    Alive sessions are never returned. De-duplicated by name.
+    """
+    want_all = older_than_days is not None and not (orphans or dead)
+    candidates: dict[str, PruneCandidate] = {}
+
+    if orphans or want_all:
+        for p in orphan_dirs():
+            candidates[p.name] = PruneCandidate(p.name, p, _dir_size(p), 'orphan')
+
+    if dead or want_all:
+        for state in list_states():
+            if await alive(state):
+                continue
+            p = sessions_dir() / state.name
+            if state.name in candidates:
+                continue
+            candidates[state.name] = PruneCandidate(
+                state.name, p, _dir_size(p) if p.exists() else 0, 'dead'
+            )
+
+    if older_than_days is not None:
+        threshold = older_than_days * 86400.0
+        kept: dict[str, PruneCandidate] = {}
+        for name, c in candidates.items():
+            st = load(name) if state_path(name).exists() else None
+            if _profile_age_seconds(name, c.path, st) >= threshold:
+                kept[name] = c
+        candidates = kept
+
+    return sorted(candidates.values(), key=lambda c: c.name)
+
+
+async def remove_async(name: str, *, timeout: float = 10.0) -> int:
+    """Stop a session if running and delete its profile dir + state file.
+
+    Async so attached-session teardown runs in the caller's event loop instead
+    of via a nested ``asyncio.run``. Returns bytes freed. Raises
+    ``FileNotFoundError`` if neither a state file nor a profile dir exists.
+    """
+    pdir = sessions_dir() / name
+    state: SessionState | None = None
+    if state_path(name).exists():
+        state = load(name)
+    elif not pdir.exists():
+        raise FileNotFoundError(
+            f'No session or profile named {name!r}. Use `pydoll-cli session list`.'
+        )
+
+    if state is not None:
+        if state.attached:
+            with contextlib.suppress(Exception):
+                await _stop_attached(state)
+        else:
+            _kill(state.pid, timeout=timeout)
+    state_path(name).unlink(missing_ok=True)
+    return purge_profile(name)
 
 
 # ---- Attached sessions --------------------------------------------------
