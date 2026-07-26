@@ -40,6 +40,7 @@ class GlobalOptions:
     tab_url: str | None = None
     new_tab: bool = False  # With --connect/--session: open a new tab (default context)
     fresh: bool = False  # With --connect/--session: new incognito browser context + new tab
+    include_internal: bool = False  # Let devtools:// / chrome:// targets count as tabs
 
     # Behavior
     timeout: float = 30.0

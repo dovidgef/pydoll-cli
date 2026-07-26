@@ -4,6 +4,48 @@ All notable changes to pydoll-cli are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`console` command group — read browser console output and JS errors.**
+  `console logs` dumps the current document's console history and exits;
+  `console watch` streams the same records as NDJSON until SIGINT or
+  `--max-events`. Both merge three sources into one normalized record shape:
+  `console.*` calls and uncaught exceptions (Runtime domain) plus
+  browser-generated messages such as failed requests, CSP violations and
+  deprecations (Log domain), which the `network` commands never surface.
+
+  `console logs` is **retroactive**: Chrome buffers each document's console
+  history (1000 entries, FIFO) and replays it to any client that enables the
+  domains, so it works on a page some earlier invocation loaded — no prior
+  arming, no daemon, no injected page shim. It returns as soon as the replay
+  burst goes quiet (`--settle`, default 0.3s) rather than waiting out a fixed
+  window; `--duration N` forces a fixed window when you also want to catch new
+  output, and `--clear` discards the browser's history so the next read returns
+  only what is new. Filters: `--level`, `--kind` (matched against the record
+  source), `--filter` (substring on the message text). The default emits every
+  level.
+- **`--include-internal`** global flag — opt back into targeting
+  browser-internal tabs.
+
+### Fixed
+
+- **A DevTools window no longer hijacks tab auto-selection.** DevTools is
+  reported by CDP as a `page` target, so it passed pydoll's `get_opened_tabs`
+  filter and could land at index 0 — making `--session NAME` calls without
+  `--tab-url` drive `devtools://devtools/bundled/devtools_app.html` instead of
+  the app. (pydoll's `Browser.connect` returns `get_opened_tabs()[0]`, so this
+  hit every `--session` / `--connect` invocation that didn't name a tab.)
+  `devtools://` and `chrome://` targets are now excluded everywhere the CLI
+  picks or lists a tab — `tabs list` / `close` / `focus`, `--tab N`,
+  `--tab-url`, the connect-time default tab, and the attached-session
+  fallback — so `tabs list` indices stay in sync with what `--tab N` resolves
+  to. Explicit selection still wins:
+  `--tab-url devtools://` finds the DevTools target, and a session pinned to an
+  internal tab by `target_id` keeps resolving. `--include-internal` restores the
+  old behavior wholesale.
+
 ## [0.3.2] — 2026-05-05
 
 Attached-session leak fixes + first-class "ride along on an existing tab" flow.

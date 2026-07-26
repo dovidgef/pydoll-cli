@@ -21,6 +21,7 @@ from pydoll_cli import session as session_mod
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.options_builder import build_options
 from pydoll_cli.output import EXIT_INTERRUPTED, CliError
+from pydoll_cli.targets import is_internal_url, visible_tabs
 
 
 def run_async(coro_fn: Callable[..., Coroutine[Any, Any, Any]]) -> Callable[..., Any]:
@@ -69,6 +70,7 @@ async def open_browser(opts: GlobalOptions) -> AsyncIterator[tuple[Any, Any]]:
             elif opts.new_tab:
                 tab = await browser.new_tab()
             else:
+                default_tab = await _non_internal_default(browser, default_tab, opts)
                 tab = await _maybe_switch_tab(browser, default_tab, opts)
             yield browser, tab
         finally:
@@ -131,8 +133,14 @@ async def _open_attached(opts: GlobalOptions, state: Any) -> AsyncIterator[tuple
             session_mod.state_path(state.name).write_text(state.to_json())
 
         # Hand whatever we have (possibly None) to the switcher; if --tab-url
-        # is set it will resolve to the requested tab.
-        default = tab if tab is not None else (tabs[0] if tabs else None)
+        # is set it will resolve to the requested tab. The fallback picks the
+        # first *visible* tab — a DevTools window must never be adopted by
+        # accident — but the target_id lookup above stays unfiltered, so a
+        # deliberately pinned chrome:// tab keeps resolving.
+        default = tab
+        if default is None:
+            candidates = await visible_tabs(browser, include_internal=opts.include_internal)
+            default = candidates[0] if candidates else None
         tab = await _maybe_switch_tab(browser, default, opts)
 
         # Re-pin to whatever the caller actually selected so the blank-tab
@@ -189,11 +197,36 @@ async def wait_for_event(
             await tab.remove_callback(callback_id)
 
 
+async def _non_internal_default(browser: Any, default_tab: Any, opts: GlobalOptions) -> Any:
+    """Keep pydoll's connect-time default tab off browser-internal targets.
+
+    ``Browser.connect`` hands back ``get_opened_tabs()[0]``, unfiltered — so an
+    open DevTools window can become the tab every ``--session`` call drives.
+    Only applies when the caller expressed no preference; ``--tab`` /
+    ``--tab-url`` are resolved afterwards by ``_maybe_switch_tab``.
+    """
+    if opts.include_internal or default_tab is None:
+        return default_tab
+    if opts.tab is not None or opts.tab_url is not None:
+        return default_tab
+    try:
+        url = await default_tab.current_url
+    except Exception:
+        return default_tab
+    if not is_internal_url(url):
+        return default_tab
+    candidates = await visible_tabs(browser)
+    return candidates[0] if candidates else default_tab
+
+
 async def _maybe_switch_tab(browser: Any, default_tab: Any, opts: GlobalOptions) -> Any:
     """When attaching to an existing browser, honor --tab / --tab-url."""
     if opts.tab is None and opts.tab_url is None:
         return default_tab
-    tabs = await browser.get_opened_tabs()
+    # Explicit selection wins: asking for `--tab-url devtools://` must find the
+    # DevTools target, not be protected from it.
+    include_internal = opts.include_internal or is_internal_url(opts.tab_url)
+    tabs = await visible_tabs(browser, include_internal=include_internal)
     if not tabs:
         return default_tab
     if opts.tab_url is not None:

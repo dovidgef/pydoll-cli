@@ -107,6 +107,7 @@ pydoll-cli exposes the full pydoll feature set as subcommands. See `pydoll-cli <
 | Extraction          | `extract` (Pydantic schema — Python file or JSON)                        |
 | Network             | `request`, `har record`, `har replay`, `network logs`, `network watch`   |
 | Interception        | `network block`, `network mock`, `network inject-header`, `network fail` (Fetch wrap pattern) |
+| Console             | `console logs` (retroactive — Chrome replays the buffered history), `console watch` |
 | Cookies & state     | `cookies get`, `cookies set`, `cookies clear`                            |
 | Stealth / evasion   | `cloudflare bypass`, `cloudflare auto-solve`, humanized typing/clicking, `--webrtc-leak-protection` |
 | Sessions            | `session start`, `session stop`, `session list`, `session info`, `session attach` |
@@ -139,6 +140,7 @@ pydoll-cli exposes the full pydoll feature set as subcommands. See `pydoll-cli <
 | `--tab INT` / `--tab-url URL`  | Target a specific tab when using `--session` / `--connect`.               |
 | `--new-tab`                    | With `--connect`/`--session`: open a new tab (default context).           |
 | `--fresh`                      | With `--connect`/`--session`: open a new incognito context + tab; leaves existing tabs untouched. Ideal for driving your logged-in browser without disturbing it. |
+| `--include-internal`           | Count browser-internal targets (`devtools://`, `chrome://`) as tabs. Excluded by default so an open DevTools window can't be auto-selected instead of your app. Explicitly asking for one (`--tab-url devtools://`) always works. |
 
 Session-start-only flags (on `session start`):
 

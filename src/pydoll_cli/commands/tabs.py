@@ -9,6 +9,7 @@ import typer
 from pydoll_cli.async_runner import open_browser, run_async
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.output import CliError, Printer
+from pydoll_cli.targets import visible_tabs
 
 group_app = typer.Typer(
     help='Manage browser tabs (list / new / close / focus).',
@@ -31,7 +32,7 @@ async def list_tabs(ctx: typer.Context) -> None:
     opts: GlobalOptions = ctx.obj
     printer = Printer(opts)
     async with open_browser(opts) as (browser, _tab):
-        tabs = await browser.get_opened_tabs()
+        tabs = await visible_tabs(browser, include_internal=opts.include_internal)
         rows = []
         for i, t in enumerate(tabs):
             try:
@@ -114,7 +115,7 @@ async def close_tab_cmd(
     opts: GlobalOptions = ctx.obj
     printer = Printer(opts)
     async with open_browser(opts) as (browser, _tab):
-        tabs = await browser.get_opened_tabs()
+        tabs = await visible_tabs(browser, include_internal=opts.include_internal)
         chosen = None
         if target_id is not None:
             for t in tabs:
@@ -148,7 +149,7 @@ async def focus_tab_cmd(
     opts: GlobalOptions = ctx.obj
     printer = Printer(opts)
     async with open_browser(opts) as (browser, _tab):
-        tabs = await browser.get_opened_tabs()
+        tabs = await visible_tabs(browser, include_internal=opts.include_internal)
         if index < 0 or index >= len(tabs):
             raise CliError(
                 f'--tab index {index} out of range (have {len(tabs)} tabs).',

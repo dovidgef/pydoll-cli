@@ -70,6 +70,8 @@ Pass `--session NAME --output json` on every call below (omitted here for brevit
 | `upload SELECTOR FILE [FILE...] [--via-chooser]` | Set files on `<input type=file>` (default) or via the file-chooser dialog (`--via-chooser`) | `{"selector","files","via_chooser"}` |
 | `batch URL [URL...] [--screenshot-dir D] [--source-dir D] [--query S] [--concurrency N]` | Visit many URLs in parallel tabs (one tab per URL, asyncio.gather) | `[{"url","title","screenshot","query_result","error"},...]` |
 | `network watch [--max-events N] [--kind {request,response,both}] [--filter STR]` | Stream NDJSON events to stdout until SIGINT or `--max-events` | one JSON per line |
+| `console logs [--level L,L] [--kind K,K] [--filter STR] [--clear]` | Console output + uncaught JS errors + browser messages (404s, CSP, deprecations) for the current page. **Retroactive** — Chrome replays the buffered history, so this works on a page loaded by an earlier call, with no prior setup | `[{"source","level","type","text","url","line","column","timestamp","stack"},...]` |
+| `console watch [--max-events N] [--level L,L] [--no-replay]` | Same records streamed live until SIGINT or `--max-events` | one JSON per line |
 | `cloudflare auto-solve [--duration N] [--captcha-timeout N]` | Background Turnstile solver — pair with `--session` and let other CLI calls drive the same browser | `{"auto_solve":"stopped"}` on exit |
 | `network block -t T... -- CMD ARGS` | Block resources by type during the inner command (Image/Stylesheet/Font/...) | inner command's stdout |
 | `network mock -p URL_SUBSTR --status N --body FILE [-H K:V] -- CMD ARGS` | Stub matching requests | inner command's stdout |

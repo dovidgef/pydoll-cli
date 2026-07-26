@@ -25,6 +25,9 @@ from pydoll_cli.commands import (
     cloudflare as cloudflare_cmd,
 )
 from pydoll_cli.commands import (
+    console as console_cmd,
+)
+from pydoll_cli.commands import (
     cookies as cookies_cmd,
 )
 from pydoll_cli.commands import (
@@ -272,6 +275,17 @@ def main(
             ),
         ),
     ] = False,
+    include_internal: Annotated[
+        bool,
+        typer.Option(
+            '--include-internal',
+            help=(
+                'Count browser-internal targets (devtools://, chrome://) as tabs. '
+                'They are excluded by default so an open DevTools window cannot be '
+                'auto-selected instead of the app.'
+            ),
+        ),
+    ] = False,
     timeout: Annotated[
         float,
         typer.Option('--timeout', help='Per-command timeout in seconds.'),
@@ -329,6 +343,7 @@ def main(
         tab_url=tab_url,
         new_tab=new_tab,
         fresh=fresh,
+        include_internal=include_internal,
         timeout=timeout,
         output=output_lc,  # type: ignore[arg-type]
         quiet=quiet,
@@ -346,6 +361,7 @@ app.add_typer(session_cmd.group_app, name='session')
 app.add_typer(cookies_cmd.group_app, name='cookies')
 app.add_typer(har_cmd.group_app, name='har')
 app.add_typer(network_cmd.group_app, name='network')
+app.add_typer(console_cmd.group_app, name='console')
 app.add_typer(cloudflare_cmd.group_app, name='cloudflare')
 app.add_typer(tabs_cmd.group_app, name='tabs')
 app.add_typer(keyboard_cmd.group_app, name='keyboard')

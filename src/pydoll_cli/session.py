@@ -28,6 +28,7 @@ from pydoll.browser import Chrome
 from pydoll_cli import browsers
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.output import CliError
+from pydoll_cli.targets import is_internal_url, visible_tabs
 
 _IS_WINDOWS = platform.system() == 'Windows'
 
@@ -320,12 +321,16 @@ async def start_attached(
         else:
             new_tab = None
             if tab_url is not None:
-                new_tab = await _find_tab_matching(browser, tab_url)
+                new_tab = await _find_tab_matching(
+                    browser, tab_url, include_internal=opts.include_internal
+                )
                 if new_tab is None:
                     raise CliError(f'No open tab matched URL containing {tab_url!r}.', 4)
                 created = False
             elif initial_url is not None:
-                new_tab = await _find_tab_matching(browser, initial_url)
+                new_tab = await _find_tab_matching(
+                    browser, initial_url, include_internal=opts.include_internal
+                )
                 if new_tab is not None:
                     created = False
             if new_tab is None:
@@ -359,12 +364,18 @@ async def start_attached(
     return state
 
 
-async def _find_tab_matching(browser: Chrome, substring: str) -> Any | None:
+async def _find_tab_matching(
+    browser: Chrome, substring: str, *, include_internal: bool = False
+) -> Any | None:
     """First open tab whose URL contains ``substring``, else None.
 
-    Tabs whose ``current_url`` raises (detached, broken connection) are skipped.
+    Browser-internal targets (``devtools://``, ``chrome://``) are excluded
+    unless ``include_internal`` is set or the substring itself names one —
+    an explicitly requested target should always be findable. Tabs whose
+    ``current_url`` raises (detached, broken connection) are skipped.
     """
-    for t in await browser.get_opened_tabs():
+    include = include_internal or is_internal_url(substring)
+    for t in await visible_tabs(browser, include_internal=include):
         try:
             url = await t.current_url
         except Exception:

@@ -164,6 +164,51 @@ Streams one JSON document per line (NDJSON), not a single document. Each line is
 {"kind": "response", "request_id": "...", "url": "...", "status": 200, "mime_type": "application/json", "headers": {...}, "timestamp": 12345.7}
 ```
 
+### `console logs`
+A list of normalized console records, oldest first. Runtime (`console.*`,
+uncaught errors) and Log (browser-generated messages) are merged and sorted by
+`timestamp`. Works retroactively: Chrome buffers the current document's console
+history (1000 entries, FIFO) and replays it when the command enables the
+domains, so no prior arming is needed. History clears on navigation/reload.
+```json
+[
+  {"source": "console-api", "level": "warning", "type": "warning",
+   "text": "hydration mismatch",
+   "url": "https://app.com/app.js", "line": 12, "column": 4,
+   "timestamp": 1713370000123.4,
+   "stack": [{"function": "render", "url": "https://app.com/app.js", "line": 12, "column": 4}]},
+  {"source": "network", "level": "error", "type": "entry",
+   "text": "Failed to load resource: the server responded with a status of 404",
+   "url": "https://app.com/missing.png", "line": 0, "column": null,
+   "timestamp": 1713370000200.0, "stack": null},
+  {"source": "exception", "level": "error", "type": "exception",
+   "text": "ReferenceError: undefinedFn is not defined",
+   "url": "https://app.com/app.js", "line": 42, "column": 7,
+   "timestamp": 1713370000300.0, "stack": [...]}
+]
+```
+Every record has the same nine keys; absent fields are `null`.
+
+| Field | Meaning |
+| --- | --- |
+| `source` | `console-api` (a `console.*` call), `exception` (uncaught JS error), or the Log-domain source: `network`, `security`, `deprecation`, `rendering`, … Matched by `--kind`. |
+| `level` | `log` \| `debug` \| `info` \| `warning` \| `error`. Matched by `--level`. |
+| `type` | CDP subtype: the raw console call type (`log`, `table`, `trace`, `assert`, …) for `console-api`; `exception`; `entry`. |
+| `text` | Message text. Console args are stringified and space-joined; objects render via their CDP `description`/preview, never `null`. Matched by `--filter`. |
+| `url` / `line` / `column` | Origin — the top stack frame for console calls, the throw site for exceptions. |
+| `timestamp` | Milliseconds since epoch. Sort key. |
+| `stack` | Call frames (`function`, `url`, `line`, `column`) or `null`. |
+
+`console logs` returns as soon as the replay burst goes quiet (`--settle`,
+default 0.3s, capped by `--timeout`); pass `--duration N` for a fixed window
+when you also want to catch output emitted while it runs. `--clear` discards
+the browser's history afterwards so the next read returns only what is new.
+
+### `console watch`
+Streams the same records as NDJSON (one JSON document per line), not a single
+document. Enabling the domains replays the existing history first — pass
+`--no-replay` to start from now. Runs until SIGINT or `--max-events`.
+
 ### `cloudflare auto-solve`
 Long-running. Emits a final `{"auto_solve": "stopped", "duration": N or null}` on exit.
 
