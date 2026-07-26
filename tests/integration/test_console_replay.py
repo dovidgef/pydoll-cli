@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -69,7 +70,11 @@ def loaded_session(tmp_path: Path):
     try:
         yield state
     finally:
+        # stop_quiet kills the browser and removes the state file, but leaves the
+        # session's Chrome profile behind — ~7MB per run in the user's real cache
+        # dir. Tests clean up after themselves.
         session_mod.stop_quiet(SESSION_NAME)
+        shutil.rmtree(session_mod.sessions_dir() / SESSION_NAME, ignore_errors=True)
 
 
 def _console_logs(*extra: str) -> list[dict]:
