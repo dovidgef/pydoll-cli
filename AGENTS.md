@@ -48,7 +48,7 @@ pydoll-cli session stop agent-run
 | 3    | Operation timed out        | Retry with larger `--timeout`.                              |
 | 4    | Element not found          | Re-check selector; retry with `--wait`.                     |
 | 5    | Browser launch failed      | Check `--browser-binary` and system install.                |
-| 6    | Session not running        | `pydoll-cli session start …` first.                         |
+| 6    | Session not running, or its pinned tab is gone | `pydoll-cli session start …` first. If the session exists but its tab was closed (or the browser restarted), re-pin with `--tab-url SUBSTR` or stop and start it again. |
 | 7    | JS exception in `eval`     | Read the `JS error: …` line on stderr; fix the JS.          |
 | 130  | Interrupted                | User cancelled.                                             |
 

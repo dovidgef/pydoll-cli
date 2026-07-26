@@ -366,6 +366,13 @@ pydoll-cli --browser wavebox --output json session start work \
 - **`--share-profile` with `--tab-url`** adopts a matching tab without ever creating one. Errors if no match.
 - **`session stop` (shared-profile)** removes state but leaves the pinned tab open by default. Pass `--close-tab` to also close it (pre-0.3.2 behavior).
 
+**A session whose pinned tab was closed exits 6.** `session list` is not proof a session is usable — for attached sessions it only checks that the browser's WebSocket answers, never that the pinned tab still exists. A browser restart invalidates every pin at once, so a long-lived session can read "alive" and still be dead. In shared-profile mode pydoll-cli will *not* open a replacement tab (that would leave a stray `about:blank` in the user's real browser and silently run your command against it); it errors instead. Two ways out:
+```bash
+pydoll-cli --session s --tab-url 'app.com' --output json query 'h1'   # re-pins to a live tab
+pydoll-cli session stop s && pydoll-cli --browser wavebox --output json session start s --share-profile --tab-url 'app.com'
+```
+Incognito sessions still self-heal — that tab lives in a context pydoll-cli owns and `session stop` disposes it.
+
 If the user is surprised by a window popping up, check whether you actually need login state — if not, incognito is correct (and the new window is expected); if you do, add `--share-profile` and prefer `--tab-url` when the page is already open.
 
 **Wavebox users:** Wavebox runs Chromium with CDP on `:9222` if you launched it with `--remote-debugging-port=9222`; verify with `curl -s http://127.0.0.1:9222/json/version`. Then use the global `--browser wavebox` flag (it auto-enables `--attach` since Wavebox blocks fresh CDP launches) — note `--browser` goes **before** the subcommand, like `--output`:

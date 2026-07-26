@@ -168,7 +168,7 @@ Session-start-only flags (on `session start`):
 | 3    | Operation timed out              |
 | 4    | Element not found                |
 | 5    | Browser launch failed            |
-| 6    | Session not running              |
+| 6    | Session not running, or its pinned tab is gone |
 | 7    | JavaScript exception in `eval`   |
 | 130  | Interrupted (Ctrl-C)             |
 

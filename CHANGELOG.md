@@ -4,6 +4,32 @@ All notable changes to pydoll-cli are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Shared-profile attached sessions no longer spawn a replacement tab when
+  the pinned tab is gone.** Recreating the tab is only free when we own the
+  context it lives in: an incognito session's tab sits in a browser context
+  pydoll-cli created, and `session stop` disposes that context wholesale, so
+  that path still heals as before. A shared-profile session has no context of
+  ours — the replacement landed in the user's real browser and outlived the
+  session (`session stop` leaves it by default). Worse, it was silent and the
+  command then ran against `about:blank`, so `eval` / `query` / `console logs`
+  returned plausible empty answers instead of reporting a dead session.
+
+  Now that case exits **6** with the two ways out: `--tab-url SUBSTR` (which
+  re-pins the session to a live tab) or `session stop NAME` and start again.
+  The same error covers an incognito session whose context died with the
+  browser, where there is nothing left to heal into.
+
+  This was the remaining half of the 0.3.2 blank-tab fix, which only covered
+  calls that passed `--tab-url` / `--tab`. It shows up most after a browser
+  restart: that invalidates every pinned target at once, so each stale session
+  leaked one tab on its next call — while `session list` still reported them
+  alive, since for attached sessions liveness only probes the WebSocket
+  endpoint, never the pin.
+
 ## [0.4.1] — 2026-07-26
 
 Retroactive console capture, and DevTools windows no longer hijack tab

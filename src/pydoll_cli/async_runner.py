@@ -20,7 +20,7 @@ from pydoll.browser.chromium.edge import Edge
 from pydoll_cli import session as session_mod
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.options_builder import build_options
-from pydoll_cli.output import EXIT_INTERRUPTED, CliError
+from pydoll_cli.output import EXIT_INTERRUPTED, EXIT_NO_SESSION, CliError
 from pydoll_cli.targets import is_internal_url, visible_tabs
 
 
@@ -102,15 +102,31 @@ def _resolve_ws_url(opts: GlobalOptions) -> str | None:
     return None
 
 
+def _dead_pin_message(name: str) -> str:
+    """Explain a dead pin and the two ways out, without guessing which they want."""
+    return (
+        f'session {name!r} is pinned to a tab that no longer exists — it was closed, '
+        'or the browser restarted. Refusing to open a replacement tab in your browser. '
+        f'Point it at a live tab with --tab-url SUBSTR (that re-pins the session), or '
+        f'restart it: pydoll-cli session stop {name}'
+    )
+
+
 @asynccontextmanager
 async def _open_attached(opts: GlobalOptions, state: Any) -> AsyncIterator[tuple[Any, Any]]:
     """Reuse a persisted attached session: connect, find our pinned tab.
 
     If the persisted tab is gone and the caller is going to pick a tab via
-    ``--tab-url``/``--tab``, skip the blank-tab fallback — otherwise we'd
-    leak a placeholder ``about:blank`` into the user's browser on every call.
-    Re-pin ``state.target_id`` to whatever the caller actually selects so
-    subsequent calls find it directly.
+    ``--tab-url``/``--tab``, skip the replacement-tab fallback — the caller is
+    about to resolve one anyway. Re-pin ``state.target_id`` to whatever the
+    caller actually selects so subsequent calls find it directly.
+
+    When the pin is dead and the caller named no alternative, recreate the tab
+    only when it costs nothing: an incognito session's tab lives in a browser
+    context we created, and ``session stop`` disposes that context wholesale.
+    A shared-profile session has no context of ours — a replacement tab would
+    land in the user's real browser and outlive the session (``session stop``
+    leaves it by default), so we refuse and say what to do instead.
     """
     browser = Chrome()
     try:
@@ -120,14 +136,15 @@ async def _open_attached(opts: GlobalOptions, state: Any) -> AsyncIterator[tuple
         caller_will_switch = opts.tab_url is not None or opts.tab is not None
 
         if tab is None and not caller_will_switch:
-            # Persisted tab is gone and the caller didn't specify where to
-            # go — fall back to a fresh tab in the same context.
-            if state.browser_context_id:
+            if not state.browser_context_id:
+                raise CliError(_dead_pin_message(state.name), EXIT_NO_SESSION)
+            try:
                 tab = await browser.new_tab(
                     browser_context_id=state.browser_context_id,
                 )
-            else:
-                tab = await browser.new_tab()
+            except Exception as e:
+                # Context is gone too (browser restarted) — nothing to heal into.
+                raise CliError(_dead_pin_message(state.name), EXIT_NO_SESSION) from e
             state.target_id = tab._target_id
             state.created_target = True
             session_mod.state_path(state.name).write_text(state.to_json())

@@ -236,25 +236,97 @@ def test_open_attached_skips_blank_when_caller_will_switch(isolated_state_dir):
     assert on_disk['created_target'] is False
 
 
-def test_open_attached_creates_blank_when_no_switch_specified(isolated_state_dir):
-    """Persisted tab gone, no --tab-url/--tab → fall back to blank tab (current safety net)."""
-    state = _write_state(isolated_state_dir)
-    other = _FakeTab('other-tid', url='https://elsewhere.com/')
-    browser = _fake_browser([other], new_tab_target='blank-fallback')
-    opts = GlobalOptions(session='sess')
+# ---- Dead pin: heal only where it costs nothing ----------------------------
 
+
+def _open(opts, state):
     async def _run():
         async with async_runner._open_attached(opts, state) as (_b, tab):
             return tab
 
+    return _run
+
+
+def test_open_attached_shared_profile_refuses_to_spawn_a_replacement(isolated_state_dir):
+    """Dead pin + shared profile → error, never a stray about:blank in the user's browser.
+
+    A replacement tab here lands in the real profile and outlives the session
+    (`session stop` leaves it by default), so there is no such thing as a free
+    heal. Regression test for the leak that fired once per dead-pinned session
+    after a browser restart.
+    """
+    state = _write_state(isolated_state_dir, browser_context_id=None)
+    other = _FakeTab('other-tid', url='https://elsewhere.com/')
+    browser = _fake_browser([other], new_tab_target='blank-fallback')
+    opts = GlobalOptions(session='sess')
+
+    with (
+        patch('pydoll_cli.async_runner.Chrome', return_value=browser),
+        pytest.raises(CliError) as excinfo,
+    ):
+        asyncio.run(_open(opts, state)())
+
+    browser.new_tab.assert_not_called()
+    assert excinfo.value.exit_code == 6
+    message = str(excinfo.value)
+    assert 'no longer exists' in message
+    assert '--tab-url' in message  # the message names a way out
+    assert 'session stop sess' in message
+
+    # Nothing was re-pinned; the state file is untouched.
+    on_disk = json.loads((isolated_state_dir / 'sess.json').read_text())
+    assert on_disk['target_id'] == 'persisted-tid'
+
+
+def test_open_attached_incognito_still_heals(isolated_state_dir):
+    """Dead pin + our own browser context → recreate, because `session stop` disposes it."""
+    state = _write_state(isolated_state_dir, browser_context_id='ctx-id')
+    other = _FakeTab('other-tid', url='https://elsewhere.com/')
+    browser = _fake_browser([other], new_tab_target='healed-tid')
+    opts = GlobalOptions(session='sess')
+
     with patch('pydoll_cli.async_runner.Chrome', return_value=browser):
-        asyncio.run(_run())
+        tab = asyncio.run(_open(opts, state)())
 
     browser.new_tab.assert_awaited_once()
+    assert browser.new_tab.await_args.kwargs['browser_context_id'] == 'ctx-id'
+    assert tab._target_id == 'healed-tid'
 
     on_disk = json.loads((isolated_state_dir / 'sess.json').read_text())
-    assert on_disk['target_id'] == 'blank-fallback'
+    assert on_disk['target_id'] == 'healed-tid'
     assert on_disk['created_target'] is True
+
+
+def test_open_attached_incognito_context_also_gone_errors(isolated_state_dir):
+    """Browser restarted: the context died with the tab, so there is nothing to heal into."""
+    state = _write_state(isolated_state_dir, browser_context_id='ctx-id')
+    browser = _fake_browser([_FakeTab('other-tid', url='https://elsewhere.com/')])
+    browser.new_tab = AsyncMock(side_effect=RuntimeError('No browser context with given id'))
+    opts = GlobalOptions(session='sess')
+
+    with (
+        patch('pydoll_cli.async_runner.Chrome', return_value=browser),
+        pytest.raises(CliError) as excinfo,
+    ):
+        asyncio.run(_open(opts, state)())
+
+    assert excinfo.value.exit_code == 6
+
+
+def test_open_attached_dead_pin_recovers_via_tab_url(isolated_state_dir):
+    """The documented way out actually works: --tab-url resolves and re-pins."""
+    state = _write_state(isolated_state_dir, browser_context_id=None)
+    target = _FakeTab('live-tid', url='https://example.com/dashboard')
+    browser = _fake_browser([target])
+    opts = GlobalOptions(session='sess', tab_url='example.com')
+
+    with patch('pydoll_cli.async_runner.Chrome', return_value=browser):
+        tab = asyncio.run(_open(opts, state)())
+
+    browser.new_tab.assert_not_called()
+    assert tab is target
+    on_disk = json.loads((isolated_state_dir / 'sess.json').read_text())
+    assert on_disk['target_id'] == 'live-tid'
 
 
 def test_open_attached_pinned_tab_present_no_recreate(isolated_state_dir):
