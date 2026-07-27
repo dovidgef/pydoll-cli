@@ -22,7 +22,7 @@ pip install git+https://github.com/dovidgef/pydoll-cli
 Pin a release by appending a tag, or track `master` by omitting it:
 
 ```bash
-uv tool install git+https://github.com/dovidgef/pydoll-cli@v0.5.0
+uv tool install git+https://github.com/dovidgef/pydoll-cli@v0.5.1
 uv tool upgrade pydoll-cli    # re-resolves the git ref
 ```
 
@@ -210,7 +210,9 @@ Inside this repo it auto-loads at project scope with no action needed. To instal
 pydoll-cli install-skill
 
 # User scope — make it available in every Claude Code session on your machine.
-pydoll-cli install-skill --scope user      # → ~/.claude/skills/pydoll-cli/SKILL.md
+# Writes to ~/.claude/skills, or $CLAUDE_CONFIG_DIR/skills if you relocate the
+# config tree (otherwise the skill lands where Claude Code never looks).
+pydoll-cli install-skill --scope user      # → <config dir>/skills/pydoll-cli/SKILL.md
 
 # Custom location.
 pydoll-cli install-skill --target ./.claude/skills

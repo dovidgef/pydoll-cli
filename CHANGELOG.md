@@ -4,6 +4,18 @@ All notable changes to pydoll-cli are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-07-27
+
+### Fixed
+
+- **`install-skill --scope user` ignored `CLAUDE_CONFIG_DIR`.** It always wrote
+  to `~/.claude/skills`, so on a machine that relocates the Claude Code config
+  tree the skill landed in a directory Claude Code never reads — and the
+  command still reported success, which is the part that makes it expensive to
+  notice. User scope now resolves to `$CLAUDE_CONFIG_DIR/skills` when that is
+  set, falling back to `~/.claude/skills`. Project scope is unchanged: it is
+  anchored to the cwd, not the config tree.
+
 ## [0.5.0] — 2026-07-27
 
 Disk hygiene for session profiles, plus the groundwork for a public repo:

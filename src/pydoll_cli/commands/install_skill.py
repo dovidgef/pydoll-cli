@@ -1,4 +1,4 @@
-"""`install-skill` — drop the bundled Claude Code skill into ~/.claude/skills/.
+"""`install-skill` — drop the bundled Claude Code skill into a skills dir.
 
 The skill file (``SKILL.md``) is shipped inside the wheel at
 ``pydoll_cli/_skill/SKILL.md`` via a hatchling ``force-include`` rule in
@@ -9,6 +9,7 @@ skill with one command.
 
 from __future__ import annotations
 
+import os
 from importlib.resources import files
 from pathlib import Path
 from typing import Annotated
@@ -48,17 +49,33 @@ def _bundled_skill_text() -> str | None:
 _VALID_SCOPES = ('project', 'user')
 
 
+def _user_config_dir() -> Path:
+    """Claude Code's user config directory.
+
+    Defaults to ``~/.claude``, but ``CLAUDE_CONFIG_DIR`` relocates the whole
+    config tree — skills included. Honouring it matters: writing to
+    ``~/.claude/skills`` on a machine that sets the override installs the skill
+    somewhere Claude Code never reads, and the command still reports success.
+    """
+    override = os.environ.get('CLAUDE_CONFIG_DIR')
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / '.claude'
+
+
 def _skills_dir_for_scope(scope: str) -> Path:
     """Resolve the Claude Code skills directory for the given scope.
 
     Per the Claude Code skill docs, skills live at:
       - project scope: <cwd>/.claude/skills/<name>/SKILL.md  (this repo only)
-      - user scope:    ~/.claude/skills/<name>/SKILL.md      (every Claude Code session)
+      - user scope:    <config dir>/skills/<name>/SKILL.md   (every Claude Code
+        session; the config dir is ``~/.claude`` unless ``CLAUDE_CONFIG_DIR``
+        says otherwise)
     """
     if scope == 'project':
         return Path.cwd() / '.claude' / 'skills'
     if scope == 'user':
-        return Path.home() / '.claude' / 'skills'
+        return _user_config_dir() / 'skills'
     raise ValueError(f'unknown scope: {scope!r}')
 
 
@@ -67,12 +84,12 @@ def register(app: typer.Typer) -> None:
         'install-skill',
         help=(
             'Install the pydoll-cli Claude Code skill at project (./.claude/skills, '
-            'default) or user (~/.claude/skills) scope.'
+            'default) or user (the Claude Code config dir) scope.'
         ),
         epilog=(
             'Examples:\n'
             '  pydoll-cli install-skill                    # ./.claude/skills/pydoll-cli/SKILL.md\n'
-            '  pydoll-cli install-skill --scope user       # ~/.claude/skills/pydoll-cli/SKILL.md\n'
+            '  pydoll-cli install-skill --scope user       # <config dir>/skills/pydoll-cli/SKILL.md\n'
             '  pydoll-cli install-skill --target ./some/dir  # explicit skills dir\n'
             '  pydoll-cli install-skill --force\n'
             '  pydoll-cli --output json install-skill\n'
@@ -86,7 +103,8 @@ def register(app: typer.Typer) -> None:
                 '--scope',
                 help=(
                     "'project' installs to ./.claude/skills (this repo only); "
-                    "'user' installs to ~/.claude/skills (every Claude Code session). "
+                    "'user' installs to the Claude Code config dir (every session) — "
+                    '~/.claude/skills, or $CLAUDE_CONFIG_DIR/skills when set. '
                     'Ignored when --target is given.'
                 ),
                 case_sensitive=False,
