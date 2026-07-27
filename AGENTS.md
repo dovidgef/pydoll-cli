@@ -268,10 +268,10 @@ profile dirs with no state file appear as `{"name", "orphan": true,
 ### `info`
 ```json
 {
-  "pydoll_cli": "0.1.0",
-  "pydoll_python": "2.22.1",
+  "pydoll_cli": "0.5.0",
+  "pydoll_python": "2.23.1",
   "browser": {
-    "product": "Chrome/124.0.0.0",
+    "product": "Chrome/146.0.7680.153",
     "user_agent": "…",
     "revision": "…",
     "js_version": "…",

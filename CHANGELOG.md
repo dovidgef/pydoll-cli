@@ -42,6 +42,8 @@ install moves to GitHub and CI finally covers the artifact users install.
   which is what let the two drift before.
 - **A bare `pytest` no longer launches a browser.** Integration tests are
   deselected by default; run them with `pytest -m integration`.
+- Upgraded pydoll 2.22.1 → 2.23.1. No CLI change was needed; verified with the
+  unit suite and the browser-backed integration tests.
 - CI additionally builds the sdist + wheel and smoke-tests the installed
   console script, which is the only place the `install-skill` force-include can
   be caught breaking. Browser-backed integration tests moved to their own
