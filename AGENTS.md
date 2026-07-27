@@ -224,6 +224,13 @@ pydoll-cli --session s network block -t Image -t Stylesheet \
 # stdout: {"url":"https://heavy-site.com","title":"..."}   <- from `get`
 ```
 
+Fetch interception never sees a request that Chrome's HTTP cache serves, so on
+a page the session already loaded, blocking looks like it did nothing. Confirm
+on a fresh session or an unvisited URL. `getComputedStyle(document.body)
+.backgroundColor` turning transparent and `document.images[0].naturalWidth ===
+0` are reliable checks; `document.styleSheets.length` is not, because a blocked
+`<link>` still contributes an (empty) entry.
+
 ### `extract`
 With the schema's model. One record, or a list when `--all`.
 ```json

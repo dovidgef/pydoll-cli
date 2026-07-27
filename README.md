@@ -22,7 +22,7 @@ pip install git+https://github.com/dovidgef/pydoll-cli
 Pin a release by appending a tag, or track `master` by omitting it:
 
 ```bash
-uv tool install git+https://github.com/dovidgef/pydoll-cli@v0.4.2
+uv tool install git+https://github.com/dovidgef/pydoll-cli@v0.5.0
 uv tool upgrade pydoll-cli    # re-resolves the git ref
 ```
 

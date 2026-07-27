@@ -409,6 +409,7 @@ pydoll-cli --output json --session s eval --script \
 - **Don't** `eval` `tab.keyboard.press` / `tab.mouse.click`. Use `keyboard press` / `mouse click`.
 - **Don't** hand-roll `window.scrollTo(0, document.body.scrollHeight)` in `eval` for infinite scroll. Use `scroll --to-bottom --max-loops N --idle-ms M`.
 - **Don't** drive 10 URLs sequentially with `get` when they're independent. Use `batch URL URL URL --query "..."`.
+- **Don't** conclude `network block` is broken when a page you already visited in this session still renders styled. Fetch interception never sees a request the HTTP cache serves, so blocking looks like a no-op on warm assets. Verify on a fresh session (or a URL the session hasn't loaded); `getComputedStyle(document.body).backgroundColor` going transparent and `document.images[0].naturalWidth === 0` are the reliable signals — `document.styleSheets.length` is not, since a blocked `<link>` still counts.
 - **Don't** combine `--disable-images` with `network block -t Image`. The first turns image loading off via Chrome preferences; the second intercepts at the Fetch layer. Pick one — they overlap.
 - **Don't** call `network block/mock/inject-header/fail` without `--session`. The interceptor needs to share the browser with the inner command, which only works through a persistent session.
 - **Don't** conclude "no results" from a single short wait on an aggregator (Kayak/Expedia/Booking/Skyscanner). These sites return `0 of N` for tens of seconds before populating. Poll for stability (gotcha #12) before declaring a route empty.
