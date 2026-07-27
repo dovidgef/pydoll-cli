@@ -18,8 +18,9 @@ install moves to GitHub and CI finally covers the artifact users install.
   reclaimed.
 - **`session rm NAME…`** — stop a session if running, then delete its whole
   profile dir + state file.
-- **`session list`** — now also surfaces leftover profile dirs as `orphan` rows
-  (with size) so they're visible.
+- **`session list`** — now also surfaces leftover profile dirs (with size) so
+  they're visible: `orphan` for reclaimable garbage, `kept` for a profile
+  `stop --no-purge` retained on purpose.
 
 ### Changed
 
@@ -31,6 +32,14 @@ install moves to GitHub and CI finally covers the artifact users install.
   later `session start NAME` that reuses it (e.g. to preserve a login).
   Attached / shared-profile sessions own no profile dir, so their stop behavior
   is unchanged. The internal stale-session restart path never purges.
+
+  A `--no-purge` profile is recorded as **kept**, and `prune` skips kept
+  profiles unless you pass `--include-kept`. Without that, the two documented
+  workflows collided: a retained login has no state file, so it looked exactly
+  like garbage and `prune --orphans` reclaimed the very thing `--no-purge` was
+  asked to protect. Profiles left behind by pre-0.5 versions carry no marker,
+  so they are still reclaimed as orphans. `session rm NAME` deletes a kept
+  profile — naming it is unambiguous.
 - **Install is from GitHub, not PyPI.** pydoll-cli was never published to PyPI,
   so the README's `pip install pydoll-cli` / `uv tool install pydoll-cli` lines
   could not work. Use

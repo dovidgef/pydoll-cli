@@ -55,6 +55,11 @@ pydoll-cli session stop agent-run            # kills the browser AND deletes its
 pydoll-cli session prune --orphans --dry-run # preview; add --yes to delete. Also --dead, --older-than N
 pydoll-cli session rm agent-run              # stop if running + delete one session outright
 
+# Keeping a login across restarts: --no-purge marks the profile "kept", and
+# prune leaves kept profiles alone (--include-kept overrides).
+pydoll-cli session stop linkedin --no-purge
+pydoll-cli session start linkedin            # same profile, still logged in
+
 # Attach to a running Chrome/Wavebox and operate in an isolated incognito tab
 # that persists across commands (default for --browser wavebox; opt-in elsewhere)
 pydoll-cli session start my-work --attach --url https://example.com

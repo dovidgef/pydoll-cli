@@ -400,7 +400,7 @@ pydoll-cli --output json --session s eval --script \
 - **Don't** use `curl` / `requests` on a page that needs JS. Use `get` + `source` or `eval`.
 - **Don't** write a fresh Playwright/Puppeteer/Selenium script when `pydoll-cli` is available — the whole point is to save that work.
 - **Don't** launch a new browser for every step of a multi-step task. Start one session, reuse it, stop it at the end.
-- **Don't** forget `session stop` — the browser is **detached** and will outlive your CLI run. `stop` now also deletes the session's profile dir (use `--no-purge` to keep a login for restart); run `session prune --orphans` to reclaim disk from old sessions.
+- **Don't** forget `session stop` — the browser is **detached** and will outlive your CLI run. `stop` now also deletes the session's profile dir (use `--no-purge` to keep a login for restart — that marks it `kept`, which `prune` won't touch); run `session prune --orphans` to reclaim disk from old sessions.
 - **Don't** parse stderr or treat a zero-byte stdout as success. `--output json` + exit code are the contract.
 - **Don't** guess selectors forever. If `query`/`click` returns "not found", inspect `source` or `eval` the DOM — the page is usually just different than you assumed.
 - **Don't** scroll just-in-case. If the page renders all items in the initial DOM (most search/list pages with explicit pagination), scrolling adds latency for nothing. Verify lazy-load is real first (check `document.body.scrollHeight` before/after a scroll, or `document.querySelectorAll(".item").length`).

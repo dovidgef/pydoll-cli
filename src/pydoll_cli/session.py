@@ -287,14 +287,46 @@ def profile_dirs() -> list[Path]:
     return sorted(p for p in d.iterdir() if p.is_dir())
 
 
-def orphan_dirs() -> list[Path]:
+#: Written into ``sessions/<name>/`` by ``stop --no-purge`` to record that the
+#: profile was retained on purpose. Without it, a profile kept to preserve a
+#: login is indistinguishable from abandoned garbage, and ``prune --orphans``
+#: would reclaim the very thing ``--no-purge`` was asked to protect.
+KEEP_MARKER = '.keep'
+
+
+def keep_marker_path(name: str) -> Path:
+    return sessions_dir() / name / KEEP_MARKER
+
+
+def mark_kept(name: str) -> None:
+    """Record that ``name``'s profile is retained deliberately. No-op if gone."""
+    pdir = sessions_dir() / name
+    if not pdir.is_dir():
+        return
+    with contextlib.suppress(OSError):
+        keep_marker_path(name).touch()
+
+
+def is_kept(name: str) -> bool:
+    """True if this profile was retained on purpose by ``stop --no-purge``."""
+    return keep_marker_path(name).exists()
+
+
+def orphan_dirs(*, include_kept: bool = False) -> list[Path]:
     """Profile dirs with no matching ``<name>.json`` state file.
 
     These are leftover Chromium profiles from sessions whose state file was
     removed (e.g. an old ``stop`` before purge-on-stop existed, or a crash).
     They are invisible to ``list_states`` and reclaimable.
+
+    Profiles kept deliberately by ``stop --no-purge`` also have no state file,
+    so they are excluded unless ``include_kept`` is set.
     """
-    return [p for p in profile_dirs() if not state_path(p.name).exists()]
+    return [
+        p
+        for p in profile_dirs()
+        if not state_path(p.name).exists() and (include_kept or not is_kept(p.name))
+    ]
 
 
 def dir_size(path: Path) -> int:
@@ -327,7 +359,7 @@ class PruneCandidate:
     name: str
     path: Path  # the profile dir
     size: int  # bytes
-    reason: str  # 'orphan' | 'dead' | 'old'
+    reason: str  # 'orphan' | 'dead' | 'kept'
 
 
 def _profile_age_seconds(name: str, path: Path, state: SessionState | None) -> float:
@@ -346,6 +378,7 @@ async def collect_prune_candidates(
     orphans: bool = False,
     dead: bool = False,
     older_than_days: float | None = None,
+    include_kept: bool = False,
 ) -> list[PruneCandidate]:
     """Select reclaimable profiles per the given flags.
 
@@ -353,6 +386,8 @@ async def collect_prune_candidates(
     - ``dead``: registered sessions whose browser is not ``alive()``.
     - ``older_than_days`` alone (no selector): all non-alive profiles older than
       the threshold. When combined with a selector, it *filters* that selection.
+    - ``include_kept``: also consider profiles ``stop --no-purge`` retained on
+      purpose, which are protected by default.
 
     Alive sessions are never returned. De-duplicated by name.
     """
@@ -360,8 +395,9 @@ async def collect_prune_candidates(
     candidates: dict[str, PruneCandidate] = {}
 
     if orphans or want_all:
-        for p in orphan_dirs():
-            candidates[p.name] = PruneCandidate(p.name, p, dir_size(p), 'orphan')
+        for p in orphan_dirs(include_kept=include_kept):
+            reason = 'kept' if is_kept(p.name) else 'orphan'
+            candidates[p.name] = PruneCandidate(p.name, p, dir_size(p), reason)
 
     if dead or want_all:
         for state in list_states():

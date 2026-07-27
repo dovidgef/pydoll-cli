@@ -178,7 +178,8 @@ def stop(
             help=(
                 "Delete the session's on-disk profile dir (default). Use "
                 '--no-purge to keep it so a later `session start NAME` reuses '
-                'the same profile (e.g. to preserve a login).'
+                'the same profile (e.g. to preserve a login); a kept profile is '
+                'protected from `session prune`.'
             ),
         ),
     ] = True,
@@ -189,11 +190,17 @@ def stop(
         session_mod.stop(name, timeout=timeout, close_tab=close_tab)
     except FileNotFoundError as e:
         raise CliError(str(e), exit_code=6) from e
-    freed = session_mod.purge_profile(name) if purge else 0
+    if purge:
+        freed = session_mod.purge_profile(name)
+    else:
+        # Record the intent, so `prune` can tell a deliberately retained
+        # profile apart from one that was simply abandoned.
+        freed = 0
+        session_mod.mark_kept(name)
     text = f'stopped session {name!r}'
     if freed:
         text += f' (freed {human_bytes(freed)})'
-    printer.emit({'stopped': name, 'reclaimed_bytes': freed}, text=text)
+    printer.emit({'stopped': name, 'reclaimed_bytes': freed, 'kept_profile': not purge}, text=text)
 
 
 @group_app.command('list', help='List registered sessions and their status.')
@@ -212,13 +219,16 @@ async def list_sessions(ctx: typer.Context) -> None:
             }
         )
     # Surface leftover profile dirs that have no state file so they're visible
-    # and can be reclaimed with `session prune`/`session rm`.
-    orphan_paths = session_mod.orphan_dirs()
+    # and can be reclaimed with `session prune`/`session rm`. Profiles kept on
+    # purpose by `stop --no-purge` are listed as `kept`, not `orphan`, since
+    # `prune` deliberately leaves them alone.
+    orphan_paths = session_mod.orphan_dirs(include_kept=True)
     if opts.output == 'json':
         orphans = [
             {
                 'name': p.name,
-                'orphan': True,
+                'orphan': not session_mod.is_kept(p.name),
+                'kept': session_mod.is_kept(p.name),
                 'path': str(p),
                 'size_bytes': session_mod.dir_size(p),
             }
@@ -235,7 +245,8 @@ async def list_sessions(ctx: typer.Context) -> None:
             print(f'{r["name"]:<20} {kind}  port={r["port"]:<5} pid={r["pid"]:<7} {status}')
         for p in orphan_paths:
             size = human_bytes(session_mod.dir_size(p))
-            print(f'{p.name:<20} orphan    {size:<10} {p}')
+            kind = 'kept  ' if session_mod.is_kept(p.name) else 'orphan'
+            print(f'{p.name:<20} {kind}    {size:<10} {p}')
 
 
 @group_app.command('info', help='Show detail for a single session.')
@@ -273,7 +284,9 @@ def attach(
     'prune',
     help='Reclaim disk space by deleting leftover session profiles.',
     epilog=(
-        'Requires at least one selector (--orphans/--dead/--older-than).\n\n'
+        'Requires at least one selector (--orphans/--dead/--older-than).\n'
+        'Never touches a live session, and never a profile kept by '
+        '`stop --no-purge` unless you pass --include-kept.\n\n'
         'Examples:\n'
         '  pydoll-cli session prune --orphans --dry-run\n'
         '  pydoll-cli session prune --orphans --yes\n'
@@ -301,6 +314,16 @@ async def prune(
             ),
         ),
     ] = None,
+    include_kept: Annotated[
+        bool,
+        typer.Option(
+            '--include-kept',
+            help=(
+                'Also reclaim profiles that `stop --no-purge` kept on purpose. '
+                'They are protected by default — that is the point of --no-purge.'
+            ),
+        ),
+    ] = False,
     dry_run: Annotated[
         bool,
         typer.Option('--dry-run', help='Report what would be deleted without deleting.'),
@@ -318,7 +341,7 @@ async def prune(
         raise typer.Exit()
 
     candidates = await session_mod.collect_prune_candidates(
-        orphans=orphans, dead=dead, older_than_days=older_than
+        orphans=orphans, dead=dead, older_than_days=older_than, include_kept=include_kept
     )
     total = sum(c.size for c in candidates)
     payload = {

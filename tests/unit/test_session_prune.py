@@ -284,3 +284,94 @@ def test_list_shows_orphans(cache: Path):
     assert result.exit_code == 0, result.output
     assert 'leftover' in result.output
     assert 'orphan' in result.output
+
+
+# ---- kept profiles are protected from prune ----------------------------
+#
+# `stop --no-purge` and an abandoned profile look identical on disk: a dir with
+# no state file. Without a marker, `prune --orphans` reclaims the login that
+# --no-purge was asked to protect — the two documented workflows collide.
+
+
+def test_no_purge_marks_the_profile_as_kept(cache: Path, monkeypatch):
+    monkeypatch.setattr(session, '_kill', lambda *a, **k: None)
+    _write_profile(cache, 's', nbytes=1024)
+    _write_state(cache, 's')
+
+    result = runner.invoke(app, ['session', 'stop', 's', '--no-purge'])
+    assert result.exit_code == 0, result.output
+    assert session.is_kept('s')
+
+
+def test_kept_profiles_are_not_orphans(cache: Path):
+    _write_profile(cache, 'garbage')
+    _write_profile(cache, 'login')
+    session.mark_kept('login')
+
+    assert [p.name for p in session.orphan_dirs()] == ['garbage']
+    assert [p.name for p in session.orphan_dirs(include_kept=True)] == ['garbage', 'login']
+
+
+def test_prune_orphans_leaves_kept_profiles(cache: Path):
+    _write_profile(cache, 'garbage', nbytes=1024)
+    _write_profile(cache, 'login', nbytes=1024)
+    session.mark_kept('login')
+
+    result = runner.invoke(app, ['session', 'prune', '--orphans', '--yes'])
+    assert result.exit_code == 0, result.output
+    assert not (cache / 'garbage').exists()
+    assert (cache / 'login').exists()
+
+
+def test_prune_include_kept_reclaims_them(cache: Path):
+    _write_profile(cache, 'login', nbytes=1024)
+    session.mark_kept('login')
+
+    result = runner.invoke(app, ['session', 'prune', '--orphans', '--include-kept', '--yes'])
+    assert result.exit_code == 0, result.output
+    assert not (cache / 'login').exists()
+
+
+def test_older_than_alone_also_spares_kept_profiles(cache: Path, monkeypatch):
+    _patch_alive(monkeypatch, set())
+    _write_profile(cache, 'login', nbytes=1024)
+    session.mark_kept('login')
+
+    candidates = asyncio.run(session.collect_prune_candidates(older_than_days=0))
+    assert [c.name for c in candidates] == []
+
+
+def test_kept_candidate_reports_its_reason(cache: Path):
+    _write_profile(cache, 'login', nbytes=1024)
+    session.mark_kept('login')
+
+    candidates = asyncio.run(
+        session.collect_prune_candidates(orphans=True, include_kept=True),
+    )
+    assert [(c.name, c.reason) for c in candidates] == [('login', 'kept')]
+
+
+def test_list_labels_kept_separately_from_orphan(cache: Path):
+    _write_profile(cache, 'login', nbytes=1024)
+    session.mark_kept('login')
+
+    result = runner.invoke(app, ['session', 'list'])
+    assert result.exit_code == 0, result.output
+    assert 'login' in result.output
+    assert 'kept' in result.output
+    assert 'orphan' not in result.output
+
+
+def test_mark_kept_on_missing_profile_is_noop(cache: Path):
+    session.mark_kept('absent')
+    assert not session.is_kept('absent')
+
+
+def test_rm_deletes_a_kept_profile(cache: Path):
+    # Naming it explicitly is unambiguous intent; --no-purge should not shield it.
+    _write_profile(cache, 'login', nbytes=1024)
+    session.mark_kept('login')
+
+    result = runner.invoke(app, ['session', 'rm', 'login'])
+    assert result.exit_code == 0, result.output
+    assert not (cache / 'login').exists()
