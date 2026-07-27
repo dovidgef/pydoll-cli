@@ -1,0 +1,37 @@
+name: Integration
+
+# Manual only. These tests launch the real Chrome on the runner and talk CDP to
+# it, so they are slower and inherently more fragile than the unit suite — they
+# should never gate a PR. Run this after bumping pydoll, or when a CDP behaviour
+# looks like it may have shifted under us.
+#
+# Add a `schedule:` trigger here if you want an unattended weekly canary.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --locked --group dev
+
+      # The ubuntu runner image ships Chrome; fail loudly and early if it stops.
+      # `browsers` exits 0 and prints `[]` when it finds nothing, so assert on
+      # the content rather than the exit code.
+      - name: Show detected browsers
+        run: |
+          uv run pydoll-cli --output json browsers | tee browsers.json
+          grep -q '"path"' browsers.json || { echo 'no Chromium browser on this runner'; exit 1; }
+
+      - name: Integration tests
+        run: uv run pytest -m integration -q

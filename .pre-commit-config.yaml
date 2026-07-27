@@ -40,3 +40,12 @@ repos:
         language: system
         pass_filenames: false
         files: ^(src|tests)/.*\.py$
+
+      # CI installs with `uv sync --locked`, so a dependency edit that never made
+      # it into uv.lock fails there. Catch it at commit time instead.
+      - id: uv-lock-check
+        name: uv.lock is up to date
+        entry: uv lock --check
+        language: system
+        pass_filenames: false
+        files: ^(pyproject\.toml|uv\.lock)$

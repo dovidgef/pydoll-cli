@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [main, master]
 
+# Read-only by default; no job here needs write access to the repo.
+permissions:
+  contents: read
+
+# A new push to the same branch/PR supersedes the run in flight.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -15,7 +24,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
       - name: Ruff check
         run: uv run ruff check .
       - name: Ruff format check
@@ -29,7 +38,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
       - name: ty (primary)
         # ty is in preview; we run it but do not fail the job on a ty miss yet.
         continue-on-error: true
@@ -53,6 +62,53 @@ jobs:
         with:
           enable-cache: true
       - name: Install
-        run: uv sync --group dev --python ${{ matrix.python-version }}
+        run: uv sync --locked --group dev --python ${{ matrix.python-version }}
       - name: Unit tests
         run: uv run pytest tests/unit -q
+
+  # The install path users actually take is `uv tool install git+…`, which builds
+  # a wheel from the checkout. Two things in that path can only break at build
+  # time: the hatchling force-include that ships SKILL.md inside the wheel, and
+  # the version hatch reads out of __init__.py. Both are exercised here.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      # __init__.py is the single source of the version (hatch reads it), so
+      # this is the package version — it just has to match what we documented.
+      - name: Version matches the top CHANGELOG entry
+        run: |
+          pkg="$(grep -oP "^__version__ = '\K[^']+" src/pydoll_cli/__init__.py)"
+          log="$(grep -oPm1 '^## \[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)"
+          echo "package=$pkg changelog=$log"
+          test -n "$pkg" && test "$pkg" = "$log"
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Built artifacts carry that version
+        run: |
+          pkg="$(grep -oP "^__version__ = '\K[^']+" src/pydoll_cli/__init__.py)"
+          test -f "dist/pydoll_cli-$pkg-py3-none-any.whl"
+          test -f "dist/pydoll_cli-$pkg.tar.gz"
+
+      - name: Check metadata
+        run: uvx twine check dist/*
+
+      - name: Install the wheel into a clean environment
+        run: |
+          uv tool install --no-cache dist/*.whl
+          uv tool dir --bin >> "$GITHUB_PATH"
+
+      - name: Smoke-test the installed CLI
+        run: |
+          pydoll-cli --version
+          pydoll-cli --help > /dev/null
+          pydoll-cli --output json browsers > /dev/null
+          # Proves SKILL.md really shipped inside the wheel.
+          pydoll-cli install-skill --target "$RUNNER_TEMP/skills"
+          test -s "$RUNNER_TEMP/skills/pydoll-cli/SKILL.md"

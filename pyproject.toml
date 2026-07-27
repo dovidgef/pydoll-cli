@@ -4,7 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pydoll-cli"
-version = "0.4.2"
+# Single-sourced from src/pydoll_cli/__init__.py — see [tool.hatch.version].
+dynamic = ["version"]
 description = "Command-line wrapper around pydoll — automate Chromium-based browsers (Chrome, Edge, Wavebox) via the Chrome DevTools Protocol, no WebDriver required."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -49,14 +50,17 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/dovidgefen/pydoll-cli"
-Repository = "https://github.com/dovidgefen/pydoll-cli"
-Issues = "https://github.com/dovidgefen/pydoll-cli/issues"
+Homepage = "https://github.com/dovidgef/pydoll-cli"
+Repository = "https://github.com/dovidgef/pydoll-cli"
+Issues = "https://github.com/dovidgef/pydoll-cli/issues"
 "Upstream Library" = "https://github.com/autoscrape-labs/pydoll"
 
 [project.scripts]
 pydoll-cli = "pydoll_cli.cli:app"
 pydoll = "pydoll_cli.cli:app"
+
+[tool.hatch.version]
+path = "src/pydoll_cli/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pydoll_cli"]
@@ -70,8 +74,10 @@ packages = ["src/pydoll_cli"]
 include = [
     "src/pydoll_cli",
     ".claude/skills/pydoll-cli/SKILL.md",
+    "examples",
     "README.md",
     "AGENTS.md",
+    "CHANGELOG.md",
     "LICENSE",
     "pyproject.toml",
     "tests",
@@ -101,7 +107,9 @@ quote-style = "single"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+# Integration tests launch a real browser, so a bare `pytest` skips them; a
+# `-m` on the command line overrides this one. Run them with `-m integration`.
+addopts = "-ra --strict-markers -m 'not integration'"
 markers = [
     "integration: requires a real browser; opt-in via `-m integration`",
 ]
