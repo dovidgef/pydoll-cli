@@ -61,7 +61,7 @@ Pass `--session NAME --output json` on every call below (omitted here for brevit
 | `request METHOD URL [--json '{...}'] [-H "K: V"]` | HTTP carrying browser cookies | `{"status","url","headers","json","text"}` |
 | `tabs list \| new --url URL \| close --target-id ID \| focus INDEX` | Multi-tab control | see below |
 | `cookies get \| set --file cookies.json \| clear` | Cookie jar | array / ack |
-| `session start \| stop \| list \| info NAME` | Session lifecycle | see start shape above |
+| `session start \| stop \| list \| info \| rm NAME \| prune --orphans` | Session lifecycle + disk cleanup (`stop` deletes the profile by default; `--no-purge` keeps it) | see start shape above |
 | `wait --selector S \| --network-idle \| --url-contains S \| --page-event E \| --js EXPR \| --stable-ids "S\|ATTR"` | Block until a page condition is satisfied (overall `--wait N` timeout) | `{"ready":true,"ms":N,"matched":...}` |
 | `get URL --wait-for SELECTOR --wait N` | Navigate AND wait for a selector (one round-trip) | `{"url","title","wait_for"}` |
 | `keyboard press KEY [--modifiers M[,M]] \| hotkey K1 K2 [K3] \| type "text" [--humanize] \| down KEY \| up KEY` | Page-level key input | `{"pressed"\|"hotkey"\|"typed":...}` |
@@ -400,7 +400,7 @@ pydoll-cli --output json --session s eval --script \
 - **Don't** use `curl` / `requests` on a page that needs JS. Use `get` + `source` or `eval`.
 - **Don't** write a fresh Playwright/Puppeteer/Selenium script when `pydoll-cli` is available — the whole point is to save that work.
 - **Don't** launch a new browser for every step of a multi-step task. Start one session, reuse it, stop it at the end.
-- **Don't** forget `session stop` — the browser is **detached** and will outlive your CLI run.
+- **Don't** forget `session stop` — the browser is **detached** and will outlive your CLI run. `stop` now also deletes the session's profile dir (use `--no-purge` to keep a login for restart); run `session prune --orphans` to reclaim disk from old sessions.
 - **Don't** parse stderr or treat a zero-byte stdout as success. `--output json` + exit code are the contract.
 - **Don't** guess selectors forever. If `query`/`click` returns "not found", inspect `source` or `eval` the DOM — the page is usually just different than you assumed.
 - **Don't** scroll just-in-case. If the page renders all items in the initial DOM (most search/list pages with explicit pagination), scrolling adds latency for nothing. Verify lazy-load is real first (check `document.body.scrollHeight` before/after a scroll, or `document.querySelectorAll(".item").length`).

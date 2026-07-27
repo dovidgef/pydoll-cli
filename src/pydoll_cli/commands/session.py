@@ -10,7 +10,7 @@ import typer
 from pydoll_cli import session as session_mod
 from pydoll_cli.async_runner import run_async
 from pydoll_cli.context import GlobalOptions
-from pydoll_cli.output import CliError, Printer
+from pydoll_cli.output import CliError, Printer, human_bytes
 
 group_app = typer.Typer(
     help='Manage persistent browser sessions.',
@@ -153,7 +153,7 @@ async def start(
     printer.emit(data, text=text)
 
 
-@group_app.command('stop', help='Stop a session and remove its state file.')
+@group_app.command('stop', help='Stop a session, remove its state, and delete its profile.')
 def stop(
     ctx: typer.Context,
     name: Annotated[str, typer.Argument(help='Session name.')],
@@ -171,6 +171,17 @@ def stop(
             ),
         ),
     ] = False,
+    purge: Annotated[
+        bool,
+        typer.Option(
+            '--purge/--no-purge',
+            help=(
+                "Delete the session's on-disk profile dir (default). Use "
+                '--no-purge to keep it so a later `session start NAME` reuses '
+                'the same profile (e.g. to preserve a login).'
+            ),
+        ),
+    ] = True,
 ) -> None:
     opts: GlobalOptions = ctx.obj
     printer = Printer(opts)
@@ -178,7 +189,11 @@ def stop(
         session_mod.stop(name, timeout=timeout, close_tab=close_tab)
     except FileNotFoundError as e:
         raise CliError(str(e), exit_code=6) from e
-    printer.emit({'stopped': name}, text=f'stopped session {name!r}')
+    freed = session_mod.purge_profile(name) if purge else 0
+    text = f'stopped session {name!r}'
+    if freed:
+        text += f' (freed {human_bytes(freed)})'
+    printer.emit({'stopped': name, 'reclaimed_bytes': freed}, text=text)
 
 
 @group_app.command('list', help='List registered sessions and their status.')
@@ -196,16 +211,31 @@ async def list_sessions(ctx: typer.Context) -> None:
                 'alive': is_alive,
             }
         )
+    # Surface leftover profile dirs that have no state file so they're visible
+    # and can be reclaimed with `session prune`/`session rm`.
+    orphan_paths = session_mod.orphan_dirs()
     if opts.output == 'json':
-        printer.emit(rows)
+        orphans = [
+            {
+                'name': p.name,
+                'orphan': True,
+                'path': str(p),
+                'size_bytes': session_mod.dir_size(p),
+            }
+            for p in orphan_paths
+        ]
+        printer.emit(rows + orphans)
     else:
-        if not rows:
+        if not rows and not orphan_paths:
             printer.info('no sessions')
             return
         for r in rows:
             status = 'alive' if r['alive'] else 'dead'
             kind = 'attached' if r.get('attached') else 'owned   '
             print(f'{r["name"]:<20} {kind}  port={r["port"]:<5} pid={r["pid"]:<7} {status}')
+        for p in orphan_paths:
+            size = human_bytes(session_mod.dir_size(p))
+            print(f'{p.name:<20} orphan    {size:<10} {p}')
 
 
 @group_app.command('info', help='Show detail for a single session.')
@@ -237,3 +267,114 @@ def attach(
     except FileNotFoundError as e:
         raise CliError(str(e), exit_code=6) from e
     printer.emit({'ws_url': state.ws_url, 'port': state.port}, text=state.ws_url)
+
+
+@group_app.command(
+    'prune',
+    help='Reclaim disk space by deleting leftover session profiles.',
+    epilog=(
+        'Requires at least one selector (--orphans/--dead/--older-than).\n\n'
+        'Examples:\n'
+        '  pydoll-cli session prune --orphans --dry-run\n'
+        '  pydoll-cli session prune --orphans --yes\n'
+        '  pydoll-cli session prune --dead --older-than 7 --yes\n'
+    ),
+)
+@run_async
+async def prune(
+    ctx: typer.Context,
+    orphans: Annotated[
+        bool,
+        typer.Option('--orphans', help='Profile dirs with no matching state file.'),
+    ] = False,
+    dead: Annotated[
+        bool,
+        typer.Option('--dead', help='Registered sessions whose browser is not alive.'),
+    ] = False,
+    older_than: Annotated[
+        float | None,
+        typer.Option(
+            '--older-than',
+            help=(
+                'Only profiles older than N days. Filters --orphans/--dead; used '
+                'alone, selects any non-alive profile older than N days.'
+            ),
+        ),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option('--dry-run', help='Report what would be deleted without deleting.'),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option('--yes', '-y', help='Skip the confirmation prompt.'),
+    ] = False,
+) -> None:
+    opts: GlobalOptions = ctx.obj
+    printer = Printer(opts)
+    if not (orphans or dead or older_than is not None):
+        # No selector: nothing is safe to delete by default — show usage.
+        typer.echo(ctx.get_help())
+        raise typer.Exit()
+
+    candidates = await session_mod.collect_prune_candidates(
+        orphans=orphans, dead=dead, older_than_days=older_than
+    )
+    total = sum(c.size for c in candidates)
+    payload = {
+        'candidates': [
+            {'name': c.name, 'reason': c.reason, 'size_bytes': c.size, 'path': str(c.path)}
+            for c in candidates
+        ],
+        'count': len(candidates),
+        'reclaimed_bytes': total,
+    }
+
+    if not candidates:
+        printer.emit({**payload, 'pruned': False}, text='nothing to prune')
+        return
+
+    if dry_run:
+        lines = [f'{c.name:<20} {c.reason:<7} {human_bytes(c.size)}' for c in candidates]
+        lines.append(f'would reclaim {human_bytes(total)} from {len(candidates)} profile(s)')
+        printer.emit({**payload, 'dry_run': True}, text='\n'.join(lines))
+        return
+
+    if not yes:
+        if opts.output == 'json':
+            raise CliError('refusing to prune without --yes in json mode', exit_code=2)
+        if not typer.confirm(f'Delete {len(candidates)} profile(s) ({human_bytes(total)})?'):
+            raise typer.Exit(1)
+
+    for c in candidates:
+        session_mod.purge_profile(c.name)
+        session_mod.state_path(c.name).unlink(missing_ok=True)
+    printer.emit(
+        {**payload, 'pruned': True},
+        text=f'pruned {len(candidates)} profile(s), reclaimed {human_bytes(total)}',
+    )
+
+
+@group_app.command('rm', help='Stop session(s) if running and delete their profiles entirely.')
+@run_async
+async def rm(
+    ctx: typer.Context,
+    names: Annotated[list[str], typer.Argument(help='Session name(s) to remove.')],
+    timeout: Annotated[
+        float, typer.Option('--timeout', help='Seconds to wait for graceful exit.')
+    ] = 10.0,
+) -> None:
+    opts: GlobalOptions = ctx.obj
+    printer = Printer(opts)
+    removed: list[str] = []
+    total = 0
+    for name in names:
+        try:
+            total += await session_mod.remove_async(name, timeout=timeout)
+        except FileNotFoundError as e:
+            raise CliError(str(e), exit_code=6) from e
+        removed.append(name)
+    printer.emit(
+        {'removed': removed, 'reclaimed_bytes': total},
+        text=f'removed {len(removed)} session(s), reclaimed {human_bytes(total)}',
+    )

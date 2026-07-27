@@ -6,8 +6,31 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Disk hygiene for session profiles, plus the groundwork for a public repo:
+install moves to GitHub and CI finally covers the artifact users install.
+
+### Added
+
+- **`session prune`** — reclaim disk by deleting reclaimable profiles. Requires
+  a selector: `--orphans` (profile dirs with no state file), `--dead`
+  (registered sessions whose browser isn't alive), and/or `--older-than DAYS`.
+  Supports `--dry-run` and `--yes`; never touches alive sessions; reports bytes
+  reclaimed.
+- **`session rm NAME…`** — stop a session if running, then delete its whole
+  profile dir + state file.
+- **`session list`** — now also surfaces leftover profile dirs as `orphan` rows
+  (with size) so they're visible.
+
 ### Changed
 
+- **`session stop` now deletes the session's on-disk profile by default**
+  (owned sessions). Stopped sessions used to leave their full Chromium profile
+  under `~/.cache/pydoll-cli/sessions/<name>/` forever — `stop` removed only the
+  state file, so the leftovers were invisible to `list` and unreclaimable, and
+  grew with every automation run. Pass `--no-purge` to keep the profile for a
+  later `session start NAME` that reuses it (e.g. to preserve a login).
+  Attached / shared-profile sessions own no profile dir, so their stop behavior
+  is unchanged. The internal stale-session restart path never purges.
 - **Install is from GitHub, not PyPI.** pydoll-cli was never published to PyPI,
   so the README's `pip install pydoll-cli` / `uv tool install pydoll-cli` lines
   could not work. Use

@@ -256,7 +256,9 @@ With the schema's model. One record, or a list when `--all`.
 ```
 
 ### `session list`
-A list of session objects, each extended with `"alive": true|false`.
+A list of session objects, each extended with `"alive": true|false`. Leftover
+profile dirs with no state file appear as `{"name", "orphan": true,
+"size_bytes", "path"}` — reclaim them with `session prune --orphans`.
 
 ### `browsers`
 ```json
@@ -378,7 +380,10 @@ have a pre-seeded Wavebox profile past onboarding at `--user-data-dir`).
 - **Use `--session`** whenever you'll issue more than one command; each fresh
   launch costs ~1–2 seconds and a new Chrome profile.
 - **Always `session stop`** when you're done — the browser process is
-  detached and will survive the agent's own process.
+  detached and will survive the agent's own process. `stop` also deletes the
+  session's profile from disk by default; pass `--no-purge` if you intend to
+  `session start NAME` again and want to keep its login. Use `session prune
+  --orphans` periodically to reclaim space from past sessions.
 - **For element waiting**, pass `--wait N` to `query`/`click`/`type` rather
   than sleeping between commands.
 - **Timeouts**: set `--timeout` on slow pages; the default of 30 seconds

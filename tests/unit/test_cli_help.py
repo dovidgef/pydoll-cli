@@ -49,6 +49,8 @@ def test_version():
         ['session', 'list', '--help'],
         ['session', 'info', '--help'],
         ['session', 'attach', '--help'],
+        ['session', 'prune', '--help'],
+        ['session', 'rm', '--help'],
         ['cookies', '--help'],
         ['cookies', 'get', '--help'],
         ['cookies', 'set', '--help'],
