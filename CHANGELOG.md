@@ -4,6 +4,38 @@ All notable changes to pydoll-cli are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Install is from GitHub, not PyPI.** pydoll-cli was never published to PyPI,
+  so the README's `pip install pydoll-cli` / `uv tool install pydoll-cli` lines
+  could not work. Use
+  `uv tool install git+https://github.com/dovidgef/pydoll-cli` (or the
+  `pipx`/`pip` equivalent). The PyPI publish workflow is removed; a release is
+  a git tag, and `git+…@vX.Y.Z` pins it.
+- **The version is single-sourced from `pydoll_cli.__version__`.**
+  `pyproject.toml` now derives it via hatch instead of repeating the literal,
+  which is what let the two drift before.
+- **A bare `pytest` no longer launches a browser.** Integration tests are
+  deselected by default; run them with `pytest -m integration`.
+- CI additionally builds the sdist + wheel and smoke-tests the installed
+  console script, which is the only place the `install-skill` force-include can
+  be caught breaking. Browser-backed integration tests moved to their own
+  manual-dispatch workflow.
+
+### Fixed
+
+- **Repository URLs pointed at a nonexistent `dovidgefen` account** in
+  `pyproject.toml`, the README, and `SKILL.md`. The account is `dovidgef`.
+- **The console help tests failed on CI and only on CI.** CI renders help in
+  colour, and Rich's option highlighter styles a flag as two spans (`-` then
+  `-level`), so the literal `--level` the tests looked for was never present in
+  the output. The suite now pins Rich's colour and width, so help assertions
+  check the text a user actually reads.
+- The README's `extract --schema examples/quotes.json` example referenced a
+  file that was not in the repo. Added `examples/quotes.json`.
+
 ## [0.4.2] — 2026-07-26
 
 A dead session now says so instead of leaving a stray tab in your browser.

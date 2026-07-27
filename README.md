@@ -1,16 +1,29 @@
 # pydoll-cli
 
+[![CI](https://github.com/dovidgef/pydoll-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/dovidgef/pydoll-cli/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 A command-line wrapper around [pydoll](https://github.com/autoscrape-labs/pydoll) — automate Chromium-based browsers (Chrome, Edge, Wavebox, any Chromium) over the Chrome DevTools Protocol with no WebDriver, stealth defaults, and first-class JSON output for AI agents.
 
 ## Install
 
+Not on PyPI — install straight from GitHub.
+
 ```bash
 # Recommended: isolated, upgradable tool install (Astral uv)
-uv tool install pydoll-cli
+uv tool install git+https://github.com/dovidgef/pydoll-cli
 
 # Alternatives
-pipx install pydoll-cli
-pip install pydoll-cli
+pipx install git+https://github.com/dovidgef/pydoll-cli
+pip install git+https://github.com/dovidgef/pydoll-cli
+```
+
+Pin a release by appending a tag, or track `master` by omitting it:
+
+```bash
+uv tool install git+https://github.com/dovidgef/pydoll-cli@v0.4.2
+uv tool upgrade pydoll-cli    # re-resolves the git ref
 ```
 
 After install both commands are on your PATH:
@@ -180,7 +193,7 @@ See [AGENTS.md](AGENTS.md) for patterns, the stable JSON contract, and recommend
 
 This repo ships a [Claude Code skill](https://code.claude.com/docs/en/skills) at [`.claude/skills/pydoll-cli/SKILL.md`](.claude/skills/pydoll-cli/SKILL.md). It teaches Claude the canonical session-based workflow, the stable JSON contract, and the real gotchas that trip up naive agents (tab-index instability, `get` reusing the current tab, `extract --schema` field syntax, etc.). Kept lean (~180 lines) so it only pays context when triggered.
 
-Inside this repo it auto-loads at project scope with no action needed. To install it elsewhere, use the bundled command (works the same for `pip` / `uv tool` / `pipx` installs — the skill ships inside the wheel):
+Inside this repo it auto-loads at project scope with no action needed. To install it elsewhere, use the bundled command (the skill ships inside the wheel, so it works for every install method above):
 
 ```bash
 # Default: project scope — install into the current repo (.claude/skills/pydoll-cli/SKILL.md).
@@ -217,16 +230,37 @@ The skill complements `AGENTS.md`: the skill is the compact in-context primer (a
 ## Development
 
 ```bash
-git clone https://github.com/dovidgefen/pydoll-cli && cd pydoll-cli
+git clone https://github.com/dovidgef/pydoll-cli && cd pydoll-cli
 uv sync --group dev
 uv run pre-commit install   # runs ruff format, ruff check, mypy, pytest on each commit
 uv run pydoll-cli --help
-uv run pytest
+uv run pytest                     # unit tests
+uv run pytest -m integration      # opt-in; launches a real browser
 uv run ruff check . && uv run ruff format --check .
 ```
 
 Pre-commit mirrors the GitHub Actions CI checks (`.pre-commit-config.yaml`),
 so a passing local commit means a passing CI run.
+
+CI (`.github/workflows/ci.yml`) runs on every push and PR to `master`: ruff,
+mypy, the unit suite on Python 3.10–3.13 plus macOS, and a packaging job that
+builds the sdist/wheel and smoke-tests the installed console script. The
+browser-backed integration tests are a separate manual-dispatch workflow
+(`.github/workflows/integration.yml`) so a flaky real-Chrome run can never
+block a PR.
+
+### Releasing
+
+There is no package index to publish to — a release is a tag, and users install
+`git+https://github.com/dovidgef/pydoll-cli@vX.Y.Z`.
+
+```bash
+# 1. Bump src/pydoll_cli/__init__.py (__version__) — pyproject derives it.
+# 2. Move the CHANGELOG "Unreleased" section under a [X.Y.Z] — date heading.
+#    CI fails if the version and the top CHANGELOG entry disagree.
+git commit -am "chore: release X.Y.Z"
+git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin master --follow-tags
+```
 
 ## License
 

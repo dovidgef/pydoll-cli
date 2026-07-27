@@ -3,8 +3,8 @@
 The skill file (``SKILL.md``) is shipped inside the wheel at
 ``pydoll_cli/_skill/SKILL.md`` via a hatchling ``force-include`` rule in
 ``pyproject.toml``. This command copies it to a Claude Code skills directory so
-users who installed via ``pip``/``uv tool`` (rather than cloning the repo) can
-get the skill with one command.
+users who installed the package (rather than cloning the repo) can get the
+skill with one command.
 """
 
 from __future__ import annotations
@@ -124,7 +124,8 @@ def register(app: typer.Typer) -> None:
         if text is None:
             raise printer.fatal(
                 'SKILL.md not found in this pydoll-cli install. Reinstall via '
-                "'uv tool install --force pydoll-cli' (or pipx/pip equivalent).",
+                "'uv tool install --force git+https://github.com/dovidgef/pydoll-cli' "
+                '(or the pipx/pip equivalent).',
                 EXIT_GENERIC,
             )
 

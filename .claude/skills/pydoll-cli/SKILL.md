@@ -1,13 +1,13 @@
 ---
 name: pydoll-cli
-description: Drive a real Chromium browser via `pydoll-cli` for any task that touches a webpage — scrape, extract, click, fill a form, log in, screenshot, PDF, bypass Cloudflare, wait for dynamic content, read a page after JS runs. Use this whenever `pydoll-cli` is installed and the task involves navigating, interacting with, or extracting from a website. Prefer it over `curl`/`requests` (no JS) and over Playwright/Puppeteer scripts (heavier, slower to spin up). Triggers on phrases like "scrape <site>", "go to <url> and ...", "log into <site>", "automate <site>", "click the button", "fill the form", "take a screenshot of <url>", "save <page> as PDF", "extract data from <site>", "what does <site> say", "read/check <site>", "bypass Cloudflare", or any task that would otherwise need a headless browser. If `pydoll-cli` is not installed, tell the user `uv tool install pydoll-cli` (or `pipx install pydoll-cli` / `pip install pydoll-cli`) and carry on with this skill once it is.
+description: Drive a real Chromium browser via `pydoll-cli` for any task that touches a webpage — scrape, extract, click, fill a form, log in, screenshot, PDF, bypass Cloudflare, wait for dynamic content, read a page after JS runs. Use this whenever `pydoll-cli` is installed and the task involves navigating, interacting with, or extracting from a website. Prefer it over `curl`/`requests` (no JS) and over Playwright/Puppeteer scripts (heavier, slower to spin up). Triggers on phrases like "scrape <site>", "go to <url> and ...", "log into <site>", "automate <site>", "click the button", "fill the form", "take a screenshot of <url>", "save <page> as PDF", "extract data from <site>", "what does <site> say", "read/check <site>", "bypass Cloudflare", or any task that would otherwise need a headless browser. If `pydoll-cli` is not installed, tell the user `uv tool install git+https://github.com/dovidgef/pydoll-cli` (or the `pipx`/`pip` equivalent) and carry on with this skill once it is.
 ---
 
 # pydoll-cli
 
 A CLI wrapper around [pydoll](https://github.com/autoscrape-labs/pydoll) that automates Chromium over the Chrome DevTools Protocol — no WebDriver, stealth defaults, stable JSON-on-stdout contract. Built so an AI agent can drive a real browser the same way it would drive `jq` or `gh`.
 
-**Check it's installed:** `command -v pydoll-cli` — if absent, ask the user to `uv tool install pydoll-cli`.
+**Check it's installed:** `command -v pydoll-cli` — if absent, ask the user to `uv tool install git+https://github.com/dovidgef/pydoll-cli`.
 
 ## The one workflow to remember
 
@@ -417,4 +417,4 @@ pydoll-cli --output json --session s eval --script \
 
 See `AGENTS.md` in the repo for the full JSON-shape catalog per subcommand, attached-session patterns (`--connect`, `--fresh`, `--new-tab`), Wavebox specifics, and niche commands (`har record/replay`, `network logs`, `run SCRIPT.py`, `shell`). This skill covers the ~90% path; `AGENTS.md` is the reference for the rest.
 
-Repository: https://github.com/dovidgefen/pydoll-cli
+Repository: https://github.com/dovidgef/pydoll-cli
