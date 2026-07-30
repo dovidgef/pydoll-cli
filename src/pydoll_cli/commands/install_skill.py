@@ -1,7 +1,7 @@
 """`install-skill` — drop the bundled Claude Code skill into a skills dir.
 
-The skill file (``SKILL.md``) is shipped inside the wheel at
-``pydoll_cli/_skill/SKILL.md`` via a hatchling ``force-include`` rule in
+The skill (``SKILL.md`` plus ``references/*.md``) is shipped inside the wheel
+at ``pydoll_cli/_skill/`` via a hatchling ``force-include`` rule in
 ``pyproject.toml``. This command copies it to a Claude Code skills directory so
 users who installed the package (rather than cloning the repo) can get the
 skill with one command.
@@ -12,9 +12,12 @@ from __future__ import annotations
 import os
 from importlib.resources import files
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
+
+if TYPE_CHECKING:
+    from importlib.abc import Traversable
 
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.output import EXIT_GENERIC, Printer
@@ -22,27 +25,47 @@ from pydoll_cli.output import EXIT_GENERIC, Printer
 _SKILL_NAME = 'pydoll-cli'
 
 
-def _bundled_skill_text() -> str | None:
-    """Return the bundled SKILL.md text, or None if it isn't shipped.
+def _collect_md_files(root: Traversable) -> list[tuple[str, str]]:
+    """Return (relative_path, text) for every .md file under a skill root.
 
-    The wheel build copies ``.claude/skills/pydoll-cli/SKILL.md`` to
-    ``pydoll_cli/_skill/SKILL.md``. In editable installs that file may be
-    absent; in that case fall back to the in-repo path so ``uv run`` works
-    during development too.
+    ``root`` is either a ``Path`` or an ``importlib.resources`` Traversable
+    (which may live inside a zip), so only the Traversable API is used.
+    """
+    out: list[tuple[str, str]] = []
+
+    def walk(node: Traversable, prefix: str) -> None:
+        for child in node.iterdir():
+            rel = f'{prefix}{child.name}'
+            if child.is_dir():
+                walk(child, f'{rel}/')
+            elif child.name.endswith('.md'):
+                out.append((rel, child.read_text(encoding='utf-8')))
+
+    walk(root, '')
+    return sorted(out)
+
+
+def _bundled_skill_files() -> list[tuple[str, str]] | None:
+    """Return the bundled skill files, or None if they aren't shipped.
+
+    The wheel build copies ``.claude/skills/pydoll-cli/`` to
+    ``pydoll_cli/_skill/``. In editable installs that directory may be absent;
+    in that case fall back to the in-repo path so ``uv run`` works during
+    development too.
     """
     try:
-        bundled = files('pydoll_cli').joinpath('_skill/SKILL.md')
-        if bundled.is_file():
-            return bundled.read_text(encoding='utf-8')
+        bundled = files('pydoll_cli').joinpath('_skill')
+        if bundled.joinpath('SKILL.md').is_file():
+            return _collect_md_files(bundled)
     except (FileNotFoundError, ModuleNotFoundError, AttributeError):
         pass
 
     # Editable / development fallback: walk up from this file to the repo root.
     here = Path(__file__).resolve()
     for parent in here.parents:
-        candidate = parent / '.claude' / 'skills' / _SKILL_NAME / 'SKILL.md'
-        if candidate.is_file():
-            return candidate.read_text(encoding='utf-8')
+        candidate = parent / '.claude' / 'skills' / _SKILL_NAME
+        if (candidate / 'SKILL.md').is_file():
+            return _collect_md_files(candidate)
     return None
 
 
@@ -88,8 +111,8 @@ def register(app: typer.Typer) -> None:
         ),
         epilog=(
             'Examples:\n'
-            '  pydoll-cli install-skill                    # ./.claude/skills/pydoll-cli/SKILL.md\n'
-            '  pydoll-cli install-skill --scope user       # <config dir>/skills/pydoll-cli/SKILL.md\n'
+            '  pydoll-cli install-skill                    # ./.claude/skills/pydoll-cli/\n'
+            '  pydoll-cli install-skill --scope user       # <config dir>/skills/pydoll-cli/\n'
             '  pydoll-cli install-skill --target ./some/dir  # explicit skills dir\n'
             '  pydoll-cli install-skill --force\n'
             '  pydoll-cli --output json install-skill\n'
@@ -116,7 +139,7 @@ def register(app: typer.Typer) -> None:
                 '--target',
                 help=(
                     'Explicit skills directory. Overrides --scope. The skill is '
-                    'written to <target>/pydoll-cli/SKILL.md.'
+                    'written to <target>/pydoll-cli/.'
                 ),
             ),
         ] = None,
@@ -125,7 +148,7 @@ def register(app: typer.Typer) -> None:
             typer.Option(
                 '--force',
                 '-f',
-                help='Overwrite an existing SKILL.md at the destination.',
+                help='Overwrite an existing skill at the destination.',
             ),
         ] = False,
     ) -> None:
@@ -138,8 +161,8 @@ def register(app: typer.Typer) -> None:
                 f'--scope must be one of: {", ".join(_VALID_SCOPES)} (got {scope!r})',
             )
 
-        text = _bundled_skill_text()
-        if text is None:
+        skill_files = _bundled_skill_files()
+        if not skill_files:
             raise printer.fatal(
                 'SKILL.md not found in this pydoll-cli install. Reinstall via '
                 "'uv tool install --force git+https://github.com/dovidgef/pydoll-cli' "
@@ -163,15 +186,20 @@ def register(app: typer.Typer) -> None:
                 EXIT_GENERIC,
             )
 
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest.write_text(text, encoding='utf-8')
+        total_bytes = 0
+        for rel, text in skill_files:
+            out_path = dest_dir / rel
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(text, encoding='utf-8')
+            total_bytes += len(text.encode('utf-8'))
 
         printer.emit(
             {
                 'path': str(dest),
                 'scope': scope_resolved,
                 'overwritten': already_exists,
-                'bytes': len(text.encode('utf-8')),
+                'files': [rel for rel, _ in skill_files],
+                'bytes': total_bytes,
             },
-            text=f'installed skill ({scope_resolved}) to {dest}',
+            text=(f'installed skill ({scope_resolved}) to {dest_dir} ({len(skill_files)} files)'),
         )

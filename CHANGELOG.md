@@ -4,6 +4,23 @@ All notable changes to pydoll-cli are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **The Claude Code skill is now a directory** (`SKILL.md` + `references/`).
+  Two situational sections moved out of the always-loaded body into reference
+  files the agent reads on demand: `references/attached-sessions.md`
+  (attach/`--share-profile`/`--tab-url`/Wavebox) and
+  `references/network-interception.md` (`network block/mock/inject-header/
+  fail`). SKILL.md drops from ~420 to ~330 lines. The skill description no
+  longer claims blanket preference over `curl`/`requests` — plain HTTP tools
+  remain right for static pages and APIs — and no longer embeds install
+  instructions.
+- **`install-skill` copies the whole skill tree**, not just `SKILL.md`. JSON
+  output gains a `files` list (relative paths written); `path` still points at
+  `SKILL.md` and `bytes` is now the total across all files.
+
 ## [0.5.1] — 2026-07-27
 
 ### Fixed

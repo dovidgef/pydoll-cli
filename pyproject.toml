@@ -65,15 +65,15 @@ path = "src/pydoll_cli/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/pydoll_cli"]
 
-# Ship the canonical Claude Code skill inside the wheel so
-# `pydoll-cli install-skill` can write it out for pip-only users.
+# Ship the canonical Claude Code skill (SKILL.md + references/) inside the
+# wheel so `pydoll-cli install-skill` can write it out for pip-only users.
 [tool.hatch.build.targets.wheel.force-include]
-".claude/skills/pydoll-cli/SKILL.md" = "pydoll_cli/_skill/SKILL.md"
+".claude/skills/pydoll-cli" = "pydoll_cli/_skill"
 
 [tool.hatch.build.targets.sdist]
 include = [
     "src/pydoll_cli",
-    ".claude/skills/pydoll-cli/SKILL.md",
+    ".claude/skills/pydoll-cli",
     "examples",
     "README.md",
     "AGENTS.md",

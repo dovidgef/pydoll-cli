@@ -64,6 +64,22 @@ def test_install_user_scope_writes_into_the_override_dir(tmp_path: Path, monkeyp
     assert not (tmp_path / '.claude').exists()  # nothing written to the dead path
 
 
+def test_install_copies_reference_files(tmp_path: Path, monkeypatch):
+    # The skill is a directory (SKILL.md + references/), not a single file.
+    cfg = tmp_path / '.claude-personal'
+    monkeypatch.setenv('CLAUDE_CONFIG_DIR', str(cfg))
+    monkeypatch.setenv('HOME', str(tmp_path))
+
+    result = runner.invoke(app, ['install-skill', '--scope', 'user'])
+    assert result.exit_code == 0, result.output
+
+    skill_dir = cfg / 'skills' / 'pydoll-cli'
+    assert (skill_dir / 'SKILL.md').is_file()
+    references = sorted(p.name for p in (skill_dir / 'references').glob('*.md'))
+    assert 'attached-sessions.md' in references
+    assert 'network-interception.md' in references
+
+
 def test_install_refuses_to_overwrite_without_force(tmp_path: Path, monkeypatch):
     monkeypatch.setenv('CLAUDE_CONFIG_DIR', str(tmp_path / 'cfg'))
     monkeypatch.setenv('HOME', str(tmp_path))

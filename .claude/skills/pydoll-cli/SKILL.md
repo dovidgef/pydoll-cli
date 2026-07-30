@@ -1,7 +1,6 @@
 ---
 name: pydoll-cli
-description: Drive a real Chromium browser via `pydoll-cli` for any task that touches a webpage — scrape, extract, click, fill a form, log in, screenshot, PDF, bypass Cloudflare, wait for dynamic content, read a page after JS runs. Use this whenever `pydoll-cli` is installed and the task involves navigating, interacting with, or extracting from a website. Prefer it over `curl`/`requests` (no JS) and over Playwright/Puppeteer scripts (heavier, slower to spin up). Triggers on phrases like "scrape <site>", "go to <url> and ...", "log into <site>", "automate <site>", "click the button", "fill the form", "take a screenshot of <url>", "save <page> as PDF", "extract data from <site>", "what does <site> say", "read/check <site>", "bypass Cloudflare", or any task that would otherwise need a headless browser. If `pydoll-cli` is not installed, tell the user `uv tool install git+https://github.com/dovidgef/pydoll-cli` (or the `pipx`/`pip` equivalent) and carry on with this skill once it is.
----
+description: Drive a real Chromium browser via `pydoll-cli` for any task that touches a webpage — scrape, extract, click, fill a form, log in, screenshot, PDF, bypass Cloudflare, wait for dynamic content, read a page after JS runs. Use this whenever `pydoll-cli` is installed and the task involves navigating, interacting with, or extracting from a website. Prefer it over Playwright/Puppeteer scripts (heavier, slower to spin up), and over `curl`/`requests` when the page needs JavaScript or interaction — plain HTTP tools remain the right choice for static pages and APIs. Triggers on phrases like "scrape <site>", "go to <url> and ...", "log into <site>", "automate <site>", "click the button", "fill the form", "take a screenshot of <url>", "save <page> as PDF", "extract data from <site>", "what does <site> say", "read/check <site>", "bypass Cloudflare", or any task that would otherwise need a headless browser.---
 
 # pydoll-cli
 
@@ -80,7 +79,7 @@ Pass `--session NAME --output json` on every call below (omitted here for brevit
 
 For any flag you're unsure about: `pydoll-cli <command> --help`. It always has a concrete example.
 
-## Critical gotchas (learned the hard way)
+## Critical gotchas
 
 ### 1. `get URL` with `--session` reuses the **current tab**. It does NOT open a new one.
 
@@ -161,7 +160,7 @@ pydoll-cli --output json cloudflare bypass URL --captcha-timeout 15 -o page.html
 
 No default destination. Always `-o shot.png` (or `--base64` to stream to stdout). For "whole page beyond viewport" add `--full-page`.
 
-If `screenshot --full-page` hangs the first time on a fresh tab (seen on Chrome 146 with `--page-load-state interactive`), the renderer hasn't laid out content past the viewport yet. Either wait for full load before the capture, or take a viewport screenshot first to warm the renderer:
+If `screenshot --full-page` hangs the first time on a fresh tab, the renderer hasn't laid out content past the viewport yet. Either wait for full load before the capture, or take a viewport screenshot first to warm the renderer:
 ```bash
 pydoll-cli --session s --output json wait --js 'document.readyState === "complete"'
 pydoll-cli --session s --output json screenshot -o shot.png --full-page
@@ -296,104 +295,15 @@ pydoll-cli --output json batch https://a.com https://b.com https://c.com \
 
 For a visible file input: `pydoll-cli --session s upload 'input[type=file]' /path/to/a.png /path/to/b.png`. For hidden inputs behind a styled button (the common React/Tailwind pattern), pass `--via-chooser` and SELECTOR becomes the *button*: `pydoll-cli --session s upload '.upload-btn' /path/to/a.png --via-chooser`. The CLI clicks the button inside an `expect_file_chooser()` context that sets the files when the dialog opens.
 
-### 20. Network interception: wrap pattern
+### 20. Network interception: read the reference first
 
-Four interceptor commands wrap an inner command and apply CDP Fetch interception only for its duration. **All require `--session NAME`** — the inner command runs as a subprocess against the same browser:
-
-```bash
-# Block heavy resources for one request — common ~2× speedup on image-heavy pages.
-pydoll-cli --session s network block -t Image -t Stylesheet -t Font \
-  -- screenshot https://heavy-site.com -o shot.png
-
-# Mock an API endpoint (response body is the file's bytes, base64-encoded for you).
-pydoll-cli --session s network mock -p /api/me --status 200 --body fixture.json \
-  -- get https://app.com
-
-# Inject auth headers into matching requests.
-pydoll-cli --session s network inject-header -p /api/ \
-  -H "Authorization: Bearer xyz" \
-  -- request GET https://app.com/api/me
-
-# Simulate failures (default reason TIMED_OUT).
-pydoll-cli --session s network fail -p /track/ --reason CONNECTION_REFUSED \
-  -- get https://app.com
-```
-
-`-p PATTERN` is a substring match against the request URL. `-t TYPE` is one of `Document/Stylesheet/Image/Media/Font/Script/XHR/Fetch/WebSocket/...` (case-insensitive). On URL/type miss, the request continues unmodified — the wrapper only intercepts what matches.
-
-`network mock` is the testing-side complement to `request` (gotcha #14): when you want to drive the page but stub the API.
-
-**Cross-origin mocks need `Access-Control-Allow-Origin`.** The browser still CORS-checks fulfilled responses, so a mock for a host different from the page's origin must include the header or the inner `fetch()` (or `request`) fails with `TypeError: Failed to fetch`:
-```bash
-pydoll-cli --session s network mock -p /api/me --status 200 --body fixture.json \
-  -H 'content-type: application/json' \
-  -H 'access-control-allow-origin: *' \
-  -- request GET https://api.other-host.com/api/me
-```
-Same-origin mocks (page is on `app.com`, mocking `app.com/api/...`) don't need it.
-
-The `--` separator is conventional but not required — the wrapping command captures everything after the recognized options as the inner command.
+`network block | mock | inject-header | fail` wrap an inner command and apply CDP Fetch interception only for its duration — block heavy resources, stub an API, inject auth headers, simulate failures. All four require `--session NAME`. Before using any of them, read `references/network-interception.md` (in this skill's directory) — it has the wrap syntax, `-p`/`-t` matching rules, and the cross-origin CORS mock gotcha.
 
 ## Attached sessions: driving the user's logged-in Chrome
 
-If the user already has Chrome (or Wavebox/Edge) running with `--remote-debugging-port=9222` and wants an action performed against a **logged-in site** (Gmail, LinkedIn, internal dashboards), attach instead of launching fresh:
+If the user already has Chrome (or Wavebox/Edge) running with `--remote-debugging-port=9222` and wants an action performed against a **logged-in site** (Gmail, LinkedIn, internal dashboards) — or mentions Wavebox at all — read `references/attached-sessions.md` (in this skill's directory) before starting the session. It covers `--attach`, incognito vs `--share-profile`, adopting an existing tab with `--tab-url`, recovering a session whose pinned tab was closed, and Wavebox specifics.
 
-```bash
-# Incognito attach (default) — zero cookie sharing, great for research
-pydoll-cli --output json session start research --attach --url https://…
-
-# Shared-profile attach — pin a tab in the user's real logged-in profile.
-# If `--url` is already open in another tab, that tab is adopted as-is
-# (no duplicate tab, no re-navigation). Otherwise a new tab is created.
-pydoll-cli --output json session start work --attach --share-profile --url https://…
-pydoll-cli --output json --session work query '…'
-pydoll-cli --output json session stop work   # leaves the pinned tab open by default
-```
-
-**Rule of thumb:** default to **incognito** (no `--share-profile`). Opt into `--share-profile` only when you actually need the user's login state. Actions in shared-profile mode appear in the user's real history, so scope them tightly.
-
-**Adopt an existing tab (don't spawn a new one).** When the user already has the target site open and wants the agent to ride along on *that* tab — especially common with Wavebox — use `--tab-url SUBSTR` instead of `--url`:
-```bash
-pydoll-cli --browser wavebox --output json session start work \
-  --share-profile --tab-url 'github.com/anthropics'
-```
-`--tab-url` is **adopt-only**: it errors with exit 4 if no open tab matches. Adopted tabs are flagged `created_target=false` in `session info`, and `session stop` leaves them open by default. Add `--close-tab` to `session stop` if you do want to close the tab as part of teardown.
-
-**What you'll see on screen:**
-- **Incognito attach (default)** opens a **new incognito/private window** in the user's browser — Chromium can't put an incognito context inside a non-incognito window. The session response shows a non-null `browser_context_id`. `session stop` closes that window cleanly.
-- **`--share-profile` with `--url` (matching tab exists)** adopts the existing tab; nothing visible changes. `browser_context_id` is `null`, `created_target` is `false`.
-- **`--share-profile` with `--url` (no match) or no URL** opens a new tab in an existing window, sharing cookies with the user's logged-in session. `created_target` is `true`.
-- **`--share-profile` with `--tab-url`** adopts a matching tab without ever creating one. Errors if no match.
-- **`session stop` (shared-profile)** removes state but leaves the pinned tab open by default. Pass `--close-tab` to also close it (pre-0.3.2 behavior).
-
-**A session whose pinned tab was closed exits 6.** `session list` is not proof a session is usable — for attached sessions it only checks that the browser's WebSocket answers, never that the pinned tab still exists. A browser restart invalidates every pin at once, so a long-lived session can read "alive" and still be dead. In shared-profile mode pydoll-cli will *not* open a replacement tab (that would leave a stray `about:blank` in the user's real browser and silently run your command against it); it errors instead. Two ways out:
-```bash
-pydoll-cli --session s --tab-url 'app.com' --output json query 'h1'   # re-pins to a live tab
-pydoll-cli session stop s && pydoll-cli --browser wavebox --output json session start s --share-profile --tab-url 'app.com'
-```
-Incognito sessions still self-heal — that tab lives in a context pydoll-cli owns and `session stop` disposes it.
-
-If the user is surprised by a window popping up, check whether you actually need login state — if not, incognito is correct (and the new window is expected); if you do, add `--share-profile` and prefer `--tab-url` when the page is already open.
-
-**Wavebox users:** Wavebox runs Chromium with CDP on `:9222` if you launched it with `--remote-debugging-port=9222`; verify with `curl -s http://127.0.0.1:9222/json/version`. Then use the global `--browser wavebox` flag (it auto-enables `--attach` since Wavebox blocks fresh CDP launches) — note `--browser` goes **before** the subcommand, like `--output`:
-```bash
-# Recommended: ride along on the tab the user already has open.
-pydoll-cli --browser wavebox --output json session start work \
-  --share-profile --tab-url 'partial-url-of-open-tab'
-
-# Or: open/reuse a specific URL.
-pydoll-cli --browser wavebox --output json session start work \
-  --share-profile --url 'https://...'
-```
-Don't try to `--no-attach` against Wavebox — its app-level onboarding blocks fresh launches.
-
-**Proxied research?** Add `--webrtc-leak-protection` (enables pydoll's WebRTC suppression). Otherwise WebRTC reveals the real IP independently of the HTTP proxy — a known fingerprinting hole.
-
-**Confirm you're authenticated** before doing real work (a dev-tools-disabled login wall returns ~3KB of skeleton HTML that looks like nothing went wrong):
-```bash
-pydoll-cli --output json --session s eval --script \
-  'JSON.stringify({url:location.href, title:document.title, isLogin: !!document.querySelector("input[name=session_key],form[action*=login]")})'
-```
+One rule worth knowing without the reference: default to incognito attach (no `--share-profile`); opt into the user's real profile only when you actually need their login state.
 
 ## Anti-patterns
 
@@ -409,9 +319,7 @@ pydoll-cli --output json --session s eval --script \
 - **Don't** `eval` `tab.keyboard.press` / `tab.mouse.click`. Use `keyboard press` / `mouse click`.
 - **Don't** hand-roll `window.scrollTo(0, document.body.scrollHeight)` in `eval` for infinite scroll. Use `scroll --to-bottom --max-loops N --idle-ms M`.
 - **Don't** drive 10 URLs sequentially with `get` when they're independent. Use `batch URL URL URL --query "..."`.
-- **Don't** conclude `network block` is broken when a page you already visited in this session still renders styled. Fetch interception never sees a request the HTTP cache serves, so blocking looks like a no-op on warm assets. Verify on a fresh session (or a URL the session hasn't loaded); `getComputedStyle(document.body).backgroundColor` going transparent and `document.images[0].naturalWidth === 0` are the reliable signals — `document.styleSheets.length` is not, since a blocked `<link>` still counts.
-- **Don't** combine `--disable-images` with `network block -t Image`. The first turns image loading off via Chrome preferences; the second intercepts at the Fetch layer. Pick one — they overlap.
-- **Don't** call `network block/mock/inject-header/fail` without `--session`. The interceptor needs to share the browser with the inner command, which only works through a persistent session.
+- **Don't** call `network block/mock/inject-header/fail` without `--session`. The interceptor needs to share the browser with the inner command, which only works through a persistent session. (More interception anti-patterns in `references/network-interception.md`.)
 - **Don't** conclude "no results" from a single short wait on an aggregator (Kayak/Expedia/Booking/Skyscanner). These sites return `0 of N` for tens of seconds before populating. Poll for stability (gotcha #12) before declaring a route empty.
 
 ## When this skill is installed from the pydoll-cli repo

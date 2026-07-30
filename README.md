@@ -200,19 +200,19 @@ See [AGENTS.md](AGENTS.md) for patterns, the stable JSON contract, and recommend
 
 ### Claude Code skill
 
-This repo ships a [Claude Code skill](https://code.claude.com/docs/en/skills) at [`.claude/skills/pydoll-cli/SKILL.md`](.claude/skills/pydoll-cli/SKILL.md). It teaches Claude the canonical session-based workflow, the stable JSON contract, and the real gotchas that trip up naive agents (tab-index instability, `get` reusing the current tab, `extract --schema` field syntax, etc.). Kept lean (~180 lines) so it only pays context when triggered.
+This repo ships a [Claude Code skill](https://code.claude.com/docs/en/skills) at [`.claude/skills/pydoll-cli/`](.claude/skills/pydoll-cli/) — a `SKILL.md` plus `references/` files for situational topics (attached sessions/Wavebox, network interception) that Claude reads on demand. It teaches Claude the canonical session-based workflow, the stable JSON contract, and the real gotchas that trip up naive agents (tab-index instability, `get` reusing the current tab, `extract --schema` field syntax, etc.). The always-loaded body is kept lean so it only pays context when triggered.
 
 Inside this repo it auto-loads at project scope with no action needed. To install it elsewhere, use the bundled command (the skill ships inside the wheel, so it works for every install method above):
 
 ```bash
-# Default: project scope — install into the current repo (.claude/skills/pydoll-cli/SKILL.md).
+# Default: project scope — install into the current repo (.claude/skills/pydoll-cli/).
 # Run this from any project root to make the skill available in that repo only.
 pydoll-cli install-skill
 
 # User scope — make it available in every Claude Code session on your machine.
 # Writes to ~/.claude/skills, or $CLAUDE_CONFIG_DIR/skills if you relocate the
 # config tree (otherwise the skill lands where Claude Code never looks).
-pydoll-cli install-skill --scope user      # → <config dir>/skills/pydoll-cli/SKILL.md
+pydoll-cli install-skill --scope user      # → <config dir>/skills/pydoll-cli/
 
 # Custom location.
 pydoll-cli install-skill --target ./.claude/skills
@@ -221,7 +221,7 @@ pydoll-cli install-skill --target ./.claude/skills
 pydoll-cli install-skill --force
 ```
 
-Claude Code follows the same scope hierarchy for skills as it does for plugins/settings — see Anthropic's [skills](https://docs.claude.com/en/docs/claude-code/skills) and [plugins](https://docs.claude.com/en/docs/claude-code/plugins) docs. (For a single SKILL.md like this one, a plain skill is the right packaging; the plugin format is for bundles of skills + agents + hooks.)
+Claude Code follows the same scope hierarchy for skills as it does for plugins/settings — see Anthropic's [skills](https://docs.claude.com/en/docs/claude-code/skills) and [plugins](https://docs.claude.com/en/docs/claude-code/plugins) docs. (For a single skill like this one, a plain skill is the right packaging; the plugin format is for bundles of skills + agents + hooks.)
 
 Repo-clone alternatives (track in-repo edits, no reinstall needed):
 
