@@ -9,7 +9,12 @@ import typer
 from pydoll_cli.async_runner import open_browser, run_async
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.output import CliError, Printer
-from pydoll_cli.targets import visible_tabs
+from pydoll_cli.targets import (
+    tab_title,
+    target_info_map,
+    visible_tabs,
+    visible_tabs_with_urls,
+)
 
 group_app = typer.Typer(
     help='Manage browser tabs (list / new / close / focus).',
@@ -32,21 +37,17 @@ async def list_tabs(ctx: typer.Context) -> None:
     opts: GlobalOptions = ctx.obj
     printer = Printer(opts)
     async with open_browser(opts) as (browser, _tab):
-        tabs = await visible_tabs(browser, include_internal=opts.include_internal)
+        tabs = await visible_tabs_with_urls(browser, include_internal=opts.include_internal)
+        info_map = await target_info_map(browser)
         rows = []
-        for i, t in enumerate(tabs):
-            try:
-                url = await t.current_url
-                title = await t.title
-            except Exception:
-                url, title = None, None
+        for i, (t, url) in enumerate(tabs):
             rows.append(
                 {
                     'index': i,
                     'target_id': t._target_id,
                     'type': 'page',
                     'url': url,
-                    'title': title,
+                    'title': await tab_title(t, info_map),
                 }
             )
     if opts.output == 'json':

@@ -49,10 +49,58 @@ class _BrokenTab:
         raise RuntimeError('target detached')
 
 
+class _SleepingTab:
+    """A discarded renderer: the target still attaches, but JS never runs.
+
+    This is what Wavebox / Edge / Chrome Memory Saver leave behind for a slept
+    background tab — `Runtime.evaluate` is accepted and simply never answered.
+    """
+
+    def __init__(self, target_id: str = 'asleep'):
+        self._target_id = target_id
+
+    @property
+    async def current_url(self) -> str:
+        await asyncio.sleep(3600)
+        raise AssertionError('unreachable')
+
+    @property
+    async def title(self) -> str:
+        await asyncio.sleep(3600)
+        raise AssertionError('unreachable')
+
+
 def _browser(tabs: list) -> MagicMock:
     browser = MagicMock()
     browser.get_opened_tabs = AsyncMock(return_value=tabs)
     return browser
+
+
+def _browser_with_targets(tabs: list, infos: list[dict]) -> MagicMock:
+    """Fake browser that answers Target.getTargets, like a real one does."""
+    browser = _browser(tabs)
+    browser.get_targets = AsyncMock(return_value=infos)
+    return browser
+
+
+SLEEPING_INFOS = [
+    {'targetId': 'asleep', 'type': 'page', 'url': 'https://slept.com/x', 'title': 'Slept'},
+    {'targetId': 'app', 'type': 'page', 'url': 'https://app.com/dashboard', 'title': 'App'},
+]
+
+
+def _sleeping_browser() -> MagicMock:
+    tabs = [_SleepingTab(), _FakeTab('app', 'https://app.com/dashboard')]
+    return _browser_with_targets(tabs, SLEEPING_INFOS)
+
+
+def _run_bounded(coro_factory, timeout: float = 5.0):
+    """Run a coroutine under a hard timeout so a regression fails, not hangs."""
+
+    async def _main():
+        return await asyncio.wait_for(coro_factory(), timeout=timeout)
+
+    return asyncio.run(_main())
 
 
 @pytest.fixture
@@ -96,6 +144,47 @@ def test_visible_tabs_keeps_internal_when_requested(mixed_tabs):
 def test_visible_tabs_skips_tabs_whose_url_raises(mixed_tabs):
     tabs = asyncio.run(visible_tabs(_browser([_BrokenTab(), *mixed_tabs])))
     assert [t._target_id for t in tabs] == ['app', 'docs']
+
+
+# ---- sleeping renderers ----------------------------------------------------
+# Regression: URLs must come from Target.getTargets, never from an in-page
+# evaluate. A slept tab answers CDP but never runs JS, so reading
+# `tab.current_url` blocked enumeration for the full per-command timeout on
+# every sleeping tab before the live one could be found.
+
+
+def test_visible_tabs_does_not_evaluate_in_sleeping_renderers():
+    tabs = _run_bounded(lambda: visible_tabs(_sleeping_browser()))
+    assert [t._target_id for t in tabs] == ['asleep', 'app']
+
+
+def test_tab_url_matches_a_sleeping_tab():
+    opts = GlobalOptions(session='s', tab_url='slept.com')
+    chosen = _run_bounded(lambda: async_runner._maybe_switch_tab(_sleeping_browser(), None, opts))
+    assert chosen._target_id == 'asleep'
+
+
+def test_tab_url_finds_a_live_tab_behind_a_sleeping_one():
+    """The original bug: the live tab was unreachable past a slept one."""
+    opts = GlobalOptions(session='s', tab_url='app.com')
+    chosen = _run_bounded(lambda: async_runner._maybe_switch_tab(_sleeping_browser(), None, opts))
+    assert chosen._target_id == 'app'
+
+
+def test_find_tab_matching_sees_past_a_sleeping_tab():
+    found = _run_bounded(lambda: session_mod._find_tab_matching(_sleeping_browser(), 'app.com'))
+    assert found is not None and found._target_id == 'app'
+
+
+def test_tabs_list_reports_sleeping_tabs_from_target_info():
+    browser = _sleeping_browser()
+    with _patched_browser([], browser):
+        result = runner.invoke(app, ['--session', 's', '--output', 'json', 'tabs', 'list'])
+    assert result.exit_code == 0, result.stdout
+    rows = json.loads(result.stdout)
+    assert [r['target_id'] for r in rows] == ['asleep', 'app']
+    assert rows[0]['url'] == 'https://slept.com/x'
+    assert rows[0]['title'] == 'Slept'
 
 
 # ---- _maybe_switch_tab index alignment -------------------------------------
@@ -216,9 +305,9 @@ def test_find_tab_matching_still_finds_normal_tabs(mixed_tabs):
 
 
 @contextlib.contextmanager
-def _patched_browser(tabs: list):
+def _patched_browser(tabs: list, browser: MagicMock | None = None):
     """Replace tabs.open_browser with one yielding a fake browser."""
-    browser = _browser(tabs)
+    browser = browser if browser is not None else _browser(tabs)
 
     @contextlib.asynccontextmanager
     async def _fake_open(_opts):

@@ -29,7 +29,7 @@ from pydoll.browser import Chrome
 from pydoll_cli import browsers
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.output import CliError
-from pydoll_cli.targets import is_internal_url, visible_tabs
+from pydoll_cli.targets import is_internal_url, visible_tabs_with_urls
 
 _IS_WINDOWS = platform.system() == 'Windows'
 
@@ -544,16 +544,12 @@ async def _find_tab_matching(
 
     Browser-internal targets (``devtools://``, ``chrome://``) are excluded
     unless ``include_internal`` is set or the substring itself names one —
-    an explicitly requested target should always be findable. Tabs whose
-    ``current_url`` raises (detached, broken connection) are skipped.
+    an explicitly requested target should always be findable. Tabs with no
+    resolvable URL (detached, broken connection) are skipped.
     """
     include = include_internal or is_internal_url(substring)
-    for t in await visible_tabs(browser, include_internal=include):
-        try:
-            url = await t.current_url
-        except Exception:
-            continue
-        if substring in url:
+    for t, url in await visible_tabs_with_urls(browser, include_internal=include):
+        if url and substring in url:
             return t
     return None
 
