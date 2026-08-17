@@ -21,7 +21,13 @@ from pydoll_cli import session as session_mod
 from pydoll_cli.context import GlobalOptions
 from pydoll_cli.options_builder import build_options
 from pydoll_cli.output import EXIT_INTERRUPTED, EXIT_NO_SESSION, CliError
-from pydoll_cli.targets import is_internal_url, visible_tabs
+from pydoll_cli.targets import (
+    is_internal_url,
+    tab_url,
+    target_info_map,
+    visible_tabs,
+    visible_tabs_with_urls,
+)
 
 
 def run_async(coro_fn: Callable[..., Coroutine[Any, Any, Any]]) -> Callable[..., Any]:
@@ -226,10 +232,7 @@ async def _non_internal_default(browser: Any, default_tab: Any, opts: GlobalOpti
         return default_tab
     if opts.tab is not None or opts.tab_url is not None:
         return default_tab
-    try:
-        url = await default_tab.current_url
-    except Exception:
-        return default_tab
+    url = await tab_url(default_tab, await target_info_map(browser))
     if not is_internal_url(url):
         return default_tab
     candidates = await visible_tabs(browser)
@@ -243,13 +246,12 @@ async def _maybe_switch_tab(browser: Any, default_tab: Any, opts: GlobalOptions)
     # Explicit selection wins: asking for `--tab-url devtools://` must find the
     # DevTools target, not be protected from it.
     include_internal = opts.include_internal or is_internal_url(opts.tab_url)
-    tabs = await visible_tabs(browser, include_internal=include_internal)
+    tabs = await visible_tabs_with_urls(browser, include_internal=include_internal)
     if not tabs:
         return default_tab
     if opts.tab_url is not None:
-        for tab in tabs:
-            url = await tab.current_url
-            if opts.tab_url in url:
+        for tab, url in tabs:
+            if url and opts.tab_url in url:
                 return tab
         raise CliError(f'No open tab matched URL containing {opts.tab_url!r}.', 4)
     if opts.tab is not None:
@@ -258,5 +260,5 @@ async def _maybe_switch_tab(browser: Any, default_tab: Any, opts: GlobalOptions)
                 f'--tab {opts.tab} out of range (have {len(tabs)} tabs).',
                 2,
             )
-        return tabs[opts.tab]
+        return tabs[opts.tab][0]
     return default_tab
