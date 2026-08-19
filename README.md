@@ -253,6 +253,16 @@ uv run ruff check . && uv run ruff format --check .
 Pre-commit mirrors the GitHub Actions CI checks (`.pre-commit-config.yaml`),
 so a passing local commit means a passing CI run.
 
+Testing a working-tree change through the *installed* `pydoll-cli` (rather than
+`uv run`) needs a cache-busting reinstall. uv keys its build cache on the version
+string, so while `__version__` is unchanged `uv tool install --force .` re-installs
+the previously cached wheel and your edits silently never ship — the symptom is a
+traceback from code you already fixed:
+
+```bash
+uv cache clean pydoll-cli && uv tool install --force --no-cache .
+```
+
 CI (`.github/workflows/ci.yml`) runs on every push and PR to `master`: ruff,
 mypy, the unit suite on Python 3.10–3.13 plus macOS, and a packaging job that
 builds the sdist/wheel and smoke-tests the installed console script. The
