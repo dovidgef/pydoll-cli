@@ -4,6 +4,21 @@ All notable changes to pydoll-cli are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Tab enumeration no longer stalls on sleeping tabs.** URLs and titles now
+  come from a single browser-level `Target.getTargets` call instead of
+  `tab.current_url` / `tab.title`, which evaluate JavaScript *inside the page*.
+  Browsers that sleep background tabs (Wavebox, Edge, Chrome's Memory Saver)
+  discard the renderer while leaving the target attachable, so that evaluate is
+  accepted and never answered — it burned the full per-command timeout, per
+  sleeping tab, sequentially, before selection could reach a live one. On a
+  Wavebox with 36 tabs (11 slept), `tabs list` and `session start --tab-url`
+  never completed; both now return in ~0.5s. An in-page read survives only as a
+  5s-bounded fallback for a target `Target.getTargets` didn't report.
+
 ## [0.6.0] — 2026-07-30
 
 Upgrade note: skill copies installed at user scope before 0.6.0 are a single
